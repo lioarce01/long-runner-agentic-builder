@@ -11,26 +11,25 @@ Compatible with LangChain 1.0 create_agent pattern
 """
 
 from langchain_core.tools import tool
+from langchain.tools import ToolRuntime
 import subprocess
 import os
 from typing import Optional
 
 
 @tool
-def create_git_repo(path: str) -> str:
+def create_git_repo(runtime: ToolRuntime) -> str:
     """
     Initialize a new git repository
-
-    Args:
-        path: Directory path for the repository
 
     Returns:
         Success message or error
 
     Example:
-        >>> create_git_repo("/path/to/project")
+        >>> create_git_repo()
         "Git repository initialized at /path/to/project"
     """
+    path = runtime.state["repo_path"]
     try:
         os.makedirs(path, exist_ok=True)
         result = subprocess.run(
@@ -49,15 +48,14 @@ def create_git_repo(path: str) -> str:
 
 @tool
 def create_git_commit(
-    repo_path: str,
     message: str,
+    runtime: ToolRuntime,
     add_all: bool = True
 ) -> str:
     """
     Create a git commit
 
     Args:
-        repo_path: Path to repository
         message: Commit message
         add_all: Whether to add all changes first (default: True)
 
@@ -65,9 +63,10 @@ def create_git_commit(
         Commit SHA or error message
 
     Example:
-        >>> create_git_commit("/path/to/repo", "feat: Add login feature")
+        >>> create_git_commit("feat: Add login feature")
         "Commit created: abc123def"
     """
+    repo_path = runtime.state["repo_path"]
     try:
         # Add files if requested
         if add_all:
@@ -98,6 +97,13 @@ def create_git_commit(
         )
 
         commit_sha = sha_result.stdout.strip()[:7]
+
+        print(f"\n{'='*60}")
+        print(f"📝 GIT COMMIT CREATED")
+        print(f"   SHA: {commit_sha}")
+        print(f"   Message: {message[:60]}...")
+        print(f"{'='*60}\n")
+
         return f"Commit created: {commit_sha}"
 
     except subprocess.CalledProcessError as e:

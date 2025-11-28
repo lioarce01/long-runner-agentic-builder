@@ -12,15 +12,75 @@ Compatible with:
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from src.utils.model import get_qa_model
+from src.state.schemas import AppBuilderState
+from src.mcp_config.client import get_mcp_tools
 from src.tools.code_quality import (
     run_ruff_check,
     run_mypy_check,
     run_all_quality_checks
 )
 from src.tools.feature_tools import update_feature_status
+from src.tools.github_tools import push_to_github
 import os
 import json
 from datetime import datetime
+
+
+# Import progress log tool from coding agent
+@tool
+def update_qa_progress_log(
+    repo_path: str,
+    feature_id: str,
+    action: str,
+    commit_sha: str = None,
+    notes: str = ""
+) -> str:
+    """
+    Add QA entry to progress log
+
+    Args:
+        repo_path: Path to repository
+        feature_id: Feature ID
+        action: Action taken (qa_approved, qa_rejected)
+        commit_sha: Optional commit SHA
+        notes: Optional notes
+
+    Returns:
+        Success message
+    """
+    log_path = os.path.join(repo_path, "progress_log.json")
+
+    # Read existing log
+    if os.path.exists(log_path):
+        with open(log_path, "r", encoding="utf-8") as f:
+            log = json.load(f)
+    else:
+        log = []
+
+    # Add new entry
+    entry = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "agent": "qa_doc",
+        "feature_id": feature_id,
+        "action": action,
+        "commit_sha": commit_sha,
+        "notes": notes
+    }
+
+    log.append(entry)
+
+    # Write back
+    with open(log_path, "w", encoding="utf-8") as f:
+        json.dump(log, f, indent=2)
+
+    print(f"\n{'='*60}")
+    print(f"📋 PROGRESS LOG UPDATED")
+    print(f"   Agent: qa_doc")
+    print(f"   Feature: {feature_id}")
+    print(f"   Action: {action}")
+    print(f"{'='*60}\n")
+
+    return f"Progress log updated with {action} for {feature_id}"
 
 
 @tool
@@ -249,7 +309,7 @@ def validate_all_quality_gates(
 
 
 # Create QA/Doc Agent with LangChain 1.0 pattern
-def create_qa_doc_agent():
+async def create_qa_doc_agent():
     """
     Create the QA/Documentation Agent using LangChain 1.0's create_agent
 
@@ -258,14 +318,17 @@ def create_qa_doc_agent():
     """
     # Load system prompt
     prompt_path = "config/prompts/qa_doc.txt"
-    with open(prompt_path, "r") as f:
+    with open(prompt_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
 
     # Get model
     model = get_qa_model()
 
-    # Define tools
-    tools = [
+    # Load MCP tools
+    mcp_tools = await get_mcp_tools()
+
+    # Define custom tools
+    custom_tools = [
         # Code quality
         run_ruff_check,
         run_mypy_check,
@@ -280,13 +343,23 @@ def create_qa_doc_agent():
         create_technical_debt_entry,
         # Feature status
         update_feature_status,
+        # Progress tracking
+        update_qa_progress_log,
+        # GitHub operations
+        push_to_github,
     ]
 
-    # Create agent using LangChain 1.0 pattern
+    # Combine all tools
+    tools = custom_tools + mcp_tools
+    print(f"✅ QA/Doc agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
+
+    # Create agent using LangChain 1.0 pattern with custom state schema
+    # NOTE: create_agent() handles tool binding internally, no need for bind_tools()
     agent = create_agent(
         model,
         tools=tools,
-        system_prompt=system_prompt
+        system_prompt=system_prompt,
+        state_schema=AppBuilderState
     )
 
     return agent

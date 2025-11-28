@@ -64,9 +64,9 @@ class SoftwareBuilderApp:
         # Initialize checkpointer
         checkpointer = await get_checkpointer()
 
-        # Create workflow
+        # Create workflow (now async to load MCP tools)
         logger.info("📊 Creating multi-agent workflow...")
-        self.workflow = create_workflow()
+        self.workflow = await create_workflow()
         self.app = self.workflow.compile(checkpointer=checkpointer)
 
         logger.info("✅ Application ready\n")
@@ -172,7 +172,7 @@ class SoftwareBuilderApp:
 
     def _print_chunk(self, chunk: dict):
         """
-        Pretty print workflow updates
+        Pretty print workflow updates with detailed logging
 
         Args:
             chunk: Workflow chunk from LangGraph stream
@@ -180,8 +180,9 @@ class SoftwareBuilderApp:
         for node_name, node_output in chunk.items():
             # Print agent activity
             if node_name in ["initializer", "coding", "testing", "qa_doc"]:
-                logger.info(f"\n🤖 {node_name.upper()} AGENT")
-                logger.info("-" * 40)
+                logger.info(f"\n{'='*60}")
+                logger.info(f"🤖 {node_name.upper()} AGENT STARTED")
+                logger.info("="*60)
 
             # Print messages from agents
             if isinstance(node_output, dict):
@@ -192,21 +193,71 @@ class SoftwareBuilderApp:
                     if hasattr(latest, "type"):
                         role = latest.type.upper()  # "ai", "human", "system"
                         content = latest.content if hasattr(latest, "content") else ""
+
+                        # Check for tool calls in the message
+                        if hasattr(latest, "tool_calls") and latest.tool_calls:
+                            logger.info(f"\n🔧 TOOL CALLS:")
+                            for tool_call in latest.tool_calls:
+                                tool_name = tool_call.get("name", "unknown")
+                                logger.info(f"   → {tool_name}")
+
+                        # Check for tool results
+                        if hasattr(latest, "name") and latest.name:
+                            # This is a ToolMessage
+                            logger.info(f"\n✅ Tool Result: {latest.name}")
+                            result_preview = str(content)[:100]
+                            logger.info(f"   {result_preview}...")
                     else:
                         # Fallback for dict-style messages
                         role = latest.get("role", "agent").upper()
                         content = latest.get("content", "")
 
-                    if content:
-                        logger.info(f"[{role}] {content[:200]}...")  # Truncate long messages
+                    # Print AI responses (not tool results)
+                    if content and role == "AI":
+                        logger.info(f"\n💭 Agent: {content[:200]}...")
 
                 # Print state updates
                 if "current_feature" in node_output and node_output["current_feature"]:
                     feature = node_output["current_feature"]
-                    logger.info(f"📌 Feature: {feature['id']} - {feature['title']}")
+                    logger.info(f"\n📌 Current Feature:")
+                    logger.info(f"   ID: {feature['id']}")
+                    logger.info(f"   Title: {feature['title']}")
+                    logger.info(f"   Status: {feature.get('status', 'unknown')}")
+                    logger.info(f"   Priority: {feature.get('priority', 'unknown')}")
 
                 if "phase" in node_output:
-                    logger.info(f"📍 Phase: {node_output['phase']}")
+                    logger.info(f"\n📍 Phase: {node_output['phase']}")
+
+                # Print feature list stats
+                if "feature_list" in node_output and node_output["feature_list"]:
+                    features = node_output["feature_list"]
+                    pending = sum(1 for f in features if f.get("status") == "pending")
+                    in_progress = sum(1 for f in features if f.get("status") == "in_progress")
+                    done = sum(1 for f in features if f.get("status") == "done")
+                    failed = sum(1 for f in features if f.get("status") == "failed")
+
+                    logger.info(f"\n📊 Progress:")
+                    logger.info(f"   Total: {len(features)} features")
+                    logger.info(f"   ✅ Done: {done}")
+                    logger.info(f"   🔄 In Progress: {in_progress}")
+                    logger.info(f"   ⏳ Pending: {pending}")
+                    if failed > 0:
+                        logger.info(f"   ❌ Failed: {failed}")
+
+                # Print git context updates
+                if "git_context" in node_output:
+                    git_ctx = node_output["git_context"]
+                    if git_ctx.get("last_commit_sha"):
+                        logger.info(f"\n🔖 Last commit: {git_ctx['last_commit_sha'][:7]}")
+
+                # Print test results
+                if "test_context" in node_output:
+                    test_ctx = node_output["test_context"]
+                    if test_ctx.get("last_result"):
+                        result = test_ctx["last_result"]
+                        passed = result.get("passed", False)
+                        status_icon = "✅" if passed else "❌"
+                        logger.info(f"\n{status_icon} Tests: {test_ctx.get('passed_tests', 0)}/{test_ctx.get('passed_tests', 0) + test_ctx.get('failed_tests', 0)} passed")
 
 
 async def main():

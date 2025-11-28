@@ -50,10 +50,10 @@ async def create_mcp_client(project_path: Optional[str] = None) -> MultiServerMC
     }
 
     # Git server (always enabled)
-    # Uses uvx to run mcp-server-git
+    # Uses python -m to run mcp-server-git
     config["git"] = {
-        "command": "uvx",
-        "args": ["mcp-server-git", "--repository", project_path],
+        "command": "python",
+        "args": ["-m", "mcp_server_git", "--repository", project_path],
         "transport": "stdio"
     }
 
@@ -92,16 +92,27 @@ async def get_mcp_tools(project_path: Optional[str] = None) -> list:
         project_path: Optional project path for MCP servers
 
     Returns:
-        List of LangChain-compatible tools
+        List of LangChain-compatible tools (empty list if MCP fails or disabled)
 
     Example:
         >>> tools = await get_mcp_tools()
         >>> agent = create_agent(model, tools=tools)
     """
-    client = await create_mcp_client(project_path)
-    tools = await client.get_tools()
-    print(f"📦 Loaded {len(tools)} tools from MCP servers")
-    return tools
+    # Check if MCP is disabled via environment variable
+    if os.getenv("DISABLE_MCP", "false").lower() == "true":
+        print("⚠️  MCP disabled via DISABLE_MCP env var")
+        print("   Using custom tools only...")
+        return []
+
+    try:
+        client = await create_mcp_client(project_path)
+        tools = await client.get_tools()
+        print(f"📦 Loaded {len(tools)} tools from MCP servers")
+        return tools
+    except Exception as e:
+        print(f"⚠️  MCP tools failed to load: {type(e).__name__}")
+        print(f"   Continuing with custom tools only...")
+        return []
 
 
 __all__ = [

@@ -74,3 +74,10 @@ dmypy.json
 
 # Ruff
 .ruff_cache/
+
+output/
+scripts/
+.claude/
+blueprint.md
+IMPLEMENTATION_PLAN.md
+linkedin_post.md

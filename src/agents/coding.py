@@ -12,6 +12,8 @@ Compatible with:
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from src.utils.model import get_coding_model
+from src.state.schemas import AppBuilderState
+from src.mcp_config.client import get_mcp_tools
 from src.tools.feature_tools import (
     select_next_feature,
     update_feature_status,
@@ -22,6 +24,14 @@ from src.tools.git_tools import (
     get_git_status,
     get_git_diff,
     create_git_commit
+)
+from src.tools.filesystem_tools import (
+    create_directory,
+    write_file,
+    read_file,
+    list_directory,
+    file_exists,
+    get_file_info
 )
 from src.tools.test_tools import run_pytest_tests
 import os
@@ -138,6 +148,13 @@ def update_progress_log_entry(
     with open(log_path, "w", encoding="utf-8") as f:
         json.dump(log, f, indent=2)
 
+    print(f"\n{'='*60}")
+    print(f"📋 PROGRESS LOG UPDATED")
+    print(f"   Agent: {agent}")
+    print(f"   Feature: {feature_id}")
+    print(f"   Action: {action}")
+    print(f"{'='*60}\n")
+
     return f"Progress log updated with {action} for {feature_id}"
 
 
@@ -165,7 +182,7 @@ def read_feature_list(repo_path: str) -> list[dict]:
 
 
 # Create Coding Agent with LangChain 1.0 pattern
-def create_coding_agent():
+async def create_coding_agent():
     """
     Create the Coding Agent using LangChain 1.0's create_agent
 
@@ -174,19 +191,29 @@ def create_coding_agent():
     """
     # Load system prompt
     prompt_path = "config/prompts/coding.txt"
-    with open(prompt_path, "r") as f:
+    with open(prompt_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
 
     # Get model
     model = get_coding_model()
 
-    # Define tools
-    tools = [
+    # Load MCP tools
+    mcp_tools = await get_mcp_tools()
+
+    # Define custom tools
+    custom_tools = [
         # Feature management
         read_feature_list,
         select_next_feature,
         get_feature_by_id,
         update_feature_status,
+        # Filesystem operations
+        create_directory,
+        write_file,
+        read_file,
+        list_directory,
+        file_exists,
+        get_file_info,
         # Git operations
         get_git_log,
         get_git_status,
@@ -200,11 +227,17 @@ def create_coding_agent():
         run_pytest_tests,
     ]
 
-    # Create agent using LangChain 1.0 pattern
+    # Combine all tools
+    tools = custom_tools + mcp_tools
+    print(f"✅ Coding agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
+
+    # Create agent using LangChain 1.0 pattern with custom state schema
+    # NOTE: create_agent() handles tool binding internally, no need for bind_tools()
     agent = create_agent(
         model,
         tools=tools,
-        system_prompt=system_prompt
+        system_prompt=system_prompt,
+        state_schema=AppBuilderState
     )
 
     return agent

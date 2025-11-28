@@ -12,6 +12,8 @@ Compatible with:
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from src.utils.model import get_test_model
+from src.state.schemas import AppBuilderState
+from src.mcp_config.client import get_mcp_tools
 from src.tools.test_tools import (
     run_playwright_tests,
     run_pytest_tests,
@@ -153,7 +155,7 @@ def determine_test_strategy(project_metadata: dict, feature: dict) -> dict:
 
 
 # Create Test Agent with LangChain 1.0 pattern
-def create_test_agent():
+async def create_test_agent():
     """
     Create the Test Agent using LangChain 1.0's create_agent
 
@@ -162,14 +164,17 @@ def create_test_agent():
     """
     # Load system prompt
     prompt_path = "config/prompts/testing.txt"
-    with open(prompt_path, "r") as f:
+    with open(prompt_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
 
     # Get model
     model = get_test_model()
 
-    # Define tools
-    tools = [
+    # Load MCP tools
+    mcp_tools = await get_mcp_tools()
+
+    # Define custom tools
+    custom_tools = [
         # Testing tools
         run_playwright_tests,
         run_pytest_tests,
@@ -183,11 +188,17 @@ def create_test_agent():
         update_feature_status,
     ]
 
-    # Create agent using LangChain 1.0 pattern
+    # Combine all tools
+    tools = custom_tools + mcp_tools
+    print(f"✅ Testing agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
+
+    # Create agent using LangChain 1.0 pattern with custom state schema
+    # NOTE: create_agent() handles tool binding internally, no need for bind_tools()
     agent = create_agent(
         model,
         tools=tools,
-        system_prompt=system_prompt
+        system_prompt=system_prompt,
+        state_schema=AppBuilderState
     )
 
     return agent

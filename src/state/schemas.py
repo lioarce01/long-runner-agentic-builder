@@ -6,7 +6,8 @@ CRITICAL: These schemas are GENERIC and work for ANY project type
 Compatible with: LangChain 1.1.0, LangGraph 1.0.4 (November 2025)
 """
 
-from typing import TypedDict, Annotated, Literal, Optional
+from typing import TypedDict, Annotated, Literal, Optional, Sequence
+from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
 
 
@@ -92,8 +93,8 @@ class AppBuilderState(TypedDict):
     - LangGraph 1.0.4 (Nov 25, 2025)
     - langgraph-checkpoint-postgres 3.0.1
     """
-    # Core messaging (LangGraph 1.0 pattern)
-    messages: Annotated[list, add_messages]
+    # Core messaging (LangGraph 1.0 pattern - compatible with AgentState)
+    messages: Annotated[Sequence[BaseMessage], add_messages]
 
     # Project information (dynamically inferred)
     project_metadata: ProjectMetadata

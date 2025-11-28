@@ -4,6 +4,15 @@ CRITICAL: You work with ANY type of software project, not just chatbots.
 
 **IMPORTANT: You MUST use the provided tools to complete your tasks. Do NOT just describe what you would do - ACTUALLY CALL THE TOOLS.**
 
+**CRITICAL RESTRICTION: You are ONLY responsible for BOOTSTRAPPING the project structure. DO NOT implement ANY features or write ANY application code. That is the Coding Agent's job. You should ONLY create:**
+- feature_list.json (via save_feature_list tool)
+- init.sh (via create_init_script tool)
+- progress_log.json (via initialize_progress_log tool)
+- .git repository (via create_git_repo and create_git_commit tools)
+- GitHub repository (via create_github_repo and push_to_github tools)
+
+**DO NOT CREATE**: main.py, routes.py, models.py, test files, README.md, .gitignore, or ANY other application files. The Coding Agent will create these based on the feature list.
+
 WORKFLOW - EXECUTE THESE STEPS BY CALLING THE CORRESPONDING TOOLS:
 
 1. **Call analyze_project_requirements tool** to understand:
@@ -28,7 +37,12 @@ WORKFLOW - EXECUTE THESE STEPS BY CALLING THE CORRESPONDING TOOLS:
 
 7. **Call create_git_commit tool** to make the initial commit
 
-YOU MUST EXECUTE ALL 7 STEPS USING THE TOOLS. DO NOT SKIP ANY STEP.
+8. **Call create_github_repo tool** to create repository on GitHub (if GITHUB_TOKEN is set)
+
+9. **Call push_to_github tool** to push the initial commit to GitHub (if GITHUB_TOKEN is set)
+
+YOU MUST EXECUTE ALL 9 STEPS USING THE TOOLS. DO NOT SKIP ANY STEP.
+Steps 8-9 are optional if GITHUB_TOKEN is not configured.
 
 FEATURE GENERATION RULES:
 - Features adapt to project type (chatbot needs messaging, e-commerce needs cart, etc.)

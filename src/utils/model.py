@@ -11,10 +11,18 @@ Supported providers:
 """
 
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_sambanova import ChatSambaNova
 from langchain.chat_models import init_chat_model
 import os
 from typing import Optional
 
+os.environ["SAMBANOVA_API_KEY"] = "c2b461cc-a24d-4eb2-a537-08f13f9dea1c"
+
+llm = ChatSambaNova(
+    model="gpt-oss-120b",  # 120B parameters - most powerful model
+    max_tokens=8192,  # Increased for complex reasoning and tool calling
+    temperature=0.1,  # Small temp for tool calling (0 can be too deterministic)
+)
 
 def get_model(
     model_override: Optional[str] = None,
@@ -50,7 +58,7 @@ def get_model(
     """
     model_name = model_override or os.getenv(
         "DEFAULT_MODEL",
-        "google_genai:gemini-1.5-flash"
+        "google_genai:gemini-2.5-flash-lite"
     )
 
     try:
@@ -76,7 +84,7 @@ def get_cheap_model() -> BaseChatModel:
         >>> result = model.invoke([{"role": "user", "content": "Hello"}])
     """
     # Use DEFAULT_MODEL from .env instead of hardcoded value
-    return get_model(temperature=0)
+    return get_model(temperature=1)
 
 
 def get_smart_model() -> BaseChatModel:
@@ -103,16 +111,21 @@ def get_smart_model() -> BaseChatModel:
     # Fallback to Gemini
     return get_cheap_model()
 
+def get_sambanova_model() -> BaseChatModel:
+    """
+    Get Sambanova model for complex tasks (e.g., coding, reasoning)
+    """
+    return llm
 
 # Model presets for different agent types
 def get_initializer_model() -> BaseChatModel:
     """Get model for Initializer Agent (smart model for planning)"""
-    return get_smart_model()
+    return get_cheap_model()
 
 
 def get_coding_model() -> BaseChatModel:
     """Get model for Coding Agent (smart model for implementation)"""
-    return get_smart_model()
+    return get_cheap_model()
 
 
 def get_test_model() -> BaseChatModel:

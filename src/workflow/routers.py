@@ -40,8 +40,11 @@ def route_after_coding(state: AppBuilderState) -> Literal["testing", "END"]:
     Route after coding
 
     Decision logic:
-    - If current_feature exists → go to testing
-    - Otherwise (no more features) → END
+    - If features in "testing" status → route to testing
+    - Otherwise → END (indicates error or completion)
+
+    NOTE: Coding agent MUST set feature to "testing" before completing.
+    State is synced from feature_list.json by orchestrator wrapper.
 
     Args:
         state: Current application state
@@ -49,14 +52,38 @@ def route_after_coding(state: AppBuilderState) -> Literal["testing", "END"]:
     Returns:
         Next node name or END
     """
-    current_feature = state.get("current_feature")
+    feature_list = state.get("feature_list", [])
 
-    if current_feature:
-        print(f"✅ Feature {current_feature['id']} implemented. Moving to testing.")
+    # Check for features ready for testing
+    testing_features = [f for f in feature_list if f.get("status") == "testing"]
+
+    if testing_features:
+        print(f"\n{'='*60}")
+        print(f"✅ ROUTING: coding → testing")
+        print(f"   Features ready for testing: {[f['id'] for f in testing_features]}")
+        print(f"{'='*60}\n")
         return "testing"
 
-    # No more pending features
-    print("✅ All features implemented! Workflow complete.")
+    # No features in testing - check if all done
+    pending = [f for f in feature_list if f.get("status") == "pending"]
+    in_progress = [f for f in feature_list if f.get("status") == "in_progress"]
+    done = [f for f in feature_list if f.get("status") == "done"]
+    failed = [f for f in feature_list if f.get("status") == "failed"]
+
+    print(f"\n{'='*60}")
+    print(f"⚠️  ROUTING: coding → END")
+    print(f"   Status Summary:")
+    print(f"   - Pending: {len(pending)}")
+    print(f"   - In Progress: {len(in_progress)}")
+    print(f"   - Testing: 0")
+    print(f"   - Done: {len(done)}")
+    print(f"   - Failed: {len(failed)}")
+
+    if pending or in_progress:
+        print(f"   ⚠️  WARNING: Pending/in-progress features exist but none in testing!")
+        print(f"   This indicates coding agent didn't properly update feature status.")
+
+    print(f"{'='*60}\n")
     return "END"
 
 
@@ -105,12 +132,11 @@ def route_after_testing(state: AppBuilderState) -> Literal["qa_doc", "coding"]:
 
 def route_after_qa(state: AppBuilderState) -> Literal["coding", "END"]:
     """
-    Route after QA - continue or finish
+    Route after QA - continue to next feature or finish
 
     Decision logic:
-    - Count pending features
-    - If pending features exist → go to coding
-    - Otherwise → END
+    - If pending features exist → loop back to coding
+    - Otherwise → END (all features done/failed)
 
     Args:
         state: Current application state
@@ -121,27 +147,93 @@ def route_after_qa(state: AppBuilderState) -> Literal["coding", "END"]:
     feature_list = state.get("feature_list", [])
 
     # Count remaining pending features
-    pending_features = [
-        f for f in feature_list
-        if f.get("status") == "pending"
-    ]
+    pending_features = [f for f in feature_list if f.get("status") == "pending"]
 
     if pending_features:
-        print(f"📋 {len(pending_features)} features remaining. Continuing...")
+        print(f"\n{'='*60}")
+        print(f"✅ ROUTING: qa_doc → coding (next feature)")
+        print(f"   Remaining pending: {len(pending_features)}")
+        print(f"   Next features: {[f['id'] + ': ' + f['title'] for f in pending_features[:3]]}")
+        if len(pending_features) > 3:
+            print(f"   ... and {len(pending_features) - 3} more")
+        print(f"{'='*60}\n")
         return "coding"
 
-    # Calculate final stats
-    done_features = [f for f in feature_list if f.get("status") == "done"]
-    failed_features = [f for f in feature_list if f.get("status") == "failed"]
+    # All features processed - calculate final stats
+    done = [f for f in feature_list if f.get("status") == "done"]
+    failed = [f for f in feature_list if f.get("status") == "failed"]
+    in_progress = [f for f in feature_list if f.get("status") == "in_progress"]
+    testing = [f for f in feature_list if f.get("status") == "testing"]
 
     print(f"\n{'='*60}")
-    print(f"🎉 ALL FEATURES COMPLETED!")
-    print(f"   Total: {len(feature_list)}")
-    print(f"   ✅ Done: {len(done_features)}")
-    print(f"   ❌ Failed: {len(failed_features)}")
+    print(f"🎉 WORKFLOW COMPLETE!")
+    print(f"   Total features: {len(feature_list)}")
+    print(f"   ✅ Done: {len(done)}")
+    print(f"   ❌ Failed: {len(failed)}")
+    if in_progress:
+        print(f"   ⚠️  Still in progress: {len(in_progress)} (unexpected!)")
+    if testing:
+        print(f"   ⚠️  Still in testing: {len(testing)} (unexpected!)")
+    if len(feature_list) > 0:
+        print(f"   Success rate: {len(done) / len(feature_list) * 100:.1f}%")
     print(f"{'='*60}\n")
-
     return "END"
+
+
+def validate_feature_list_sync(state: AppBuilderState) -> dict:
+    """
+    Validate that state's feature_list matches disk file
+
+    Used for debugging state synchronization issues.
+
+    Args:
+        state: Current application state
+
+    Returns:
+        dict with validation results
+
+    Example:
+        >>> result = validate_feature_list_sync(state)
+        >>> if not result["synced"]:
+        >>>     print(f"Sync issue: {result['reason']}")
+    """
+    import os
+    import json
+
+    repo_path = state.get("repo_path", "")
+    feature_list_path = os.path.join(repo_path, "feature_list.json")
+
+    if not os.path.exists(feature_list_path):
+        return {
+            "synced": False,
+            "reason": "feature_list.json not found on disk"
+        }
+
+    try:
+        with open(feature_list_path, "r", encoding="utf-8") as f:
+            disk_features = json.load(f)
+
+        state_features = state.get("feature_list", [])
+
+        # Compare counts
+        if len(disk_features) != len(state_features):
+            return {
+                "synced": False,
+                "reason": f"Count mismatch: disk={len(disk_features)}, state={len(state_features)}"
+            }
+
+        # Compare statuses
+        for i, (disk_f, state_f) in enumerate(zip(disk_features, state_features)):
+            if disk_f.get("status") != state_f.get("status"):
+                return {
+                    "synced": False,
+                    "reason": f"Status mismatch for {disk_f['id']}: disk={disk_f['status']}, state={state_f['status']}"
+                }
+
+        return {"synced": True, "reason": "State and disk are in sync"}
+
+    except Exception as e:
+        return {"synced": False, "reason": f"Error: {e}"}
 
 
 __all__ = [
@@ -149,4 +241,5 @@ __all__ = [
     "route_after_coding",
     "route_after_testing",
     "route_after_qa",
+    "validate_feature_list_sync",
 ]

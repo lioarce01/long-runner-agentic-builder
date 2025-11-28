@@ -25,8 +25,8 @@ def generate_feature_list_from_description(
     """
     Generate a comprehensive feature list tailored to ANY software project
 
-    This tool uses LLM reasoning to dynamically create features based on
-    the project description, adapting to chatbots, e-commerce, APIs, etc.
+    This tool generates features based on project type and domain,
+    adapting to REST APIs, web apps, CLIs, etc.
 
     Args:
         project_description: Detailed description of what to build
@@ -36,57 +36,321 @@ def generate_feature_list_from_description(
 
     Returns:
         List of feature dictionaries in standard format
-
-    Note:
-        This is a placeholder. In production, this would call an LLM
-        to generate context-specific features.
     """
-    # TODO: Implement LLM-powered feature generation
-    # For now, return a basic template
     features = []
 
-    # Core features (MVP)
-    features.append({
-        "id": "f-001",
-        "title": f"Initialize {project_type} project structure",
-        "description": f"Create basic project structure for {domain} application",
-        "acceptance_criteria": [
+    # Determine tech stack based on project type
+    if project_type == "rest_api":
+        backend = ["python", "fastapi"]
+        frontend = None
+        database = None if "simple" in project_description.lower() else ["postgresql"]
+        testing = ["pytest", "httpx"]
+        deployment = ["docker"]
+    elif project_type == "web_app":
+        backend = ["python", "fastapi"]
+        frontend = ["react", "typescript"]
+        database = ["postgresql"]
+        testing = ["pytest", "playwright"]
+        deployment = ["docker"]
+    elif project_type == "cli_tool":
+        backend = ["python", "click"]
+        frontend = None
+        database = None
+        testing = ["pytest"]
+        deployment = None
+    else:
+        # Default
+        backend = ["python"]
+        frontend = None
+        database = None
+        testing = ["pytest"]
+        deployment = ["docker"]
+
+    # Feature ID counter
+    feature_count = 1
+
+    def add_feature(title: str, description: str, criteria: list, priority: int, complexity: str):
+        nonlocal feature_count
+        features.append({
+            "id": f"f-{feature_count:03d}",
+            "title": title,
+            "description": description,
+            "acceptance_criteria": criteria,
+            "status": "pending",
+            "priority": priority,
+            "complexity": complexity,
+            "attempts": 0,
+            "tech_stack": {
+                "backend": backend,
+                "frontend": frontend,
+                "database": database,
+                "testing": testing,
+                "deployment": deployment
+            }
+        })
+        feature_count += 1
+
+    # === CORE SETUP FEATURES (Priority 1) ===
+    add_feature(
+        "Project structure initialization",
+        "Create basic project directory structure with all necessary folders",
+        [
             "Project directory created",
-            "Git repository initialized",
-            "Basic configuration files present"
+            "Source code folder created",
+            "Tests folder created"
         ],
-        "status": "pending",
-        "priority": 1,
-        "complexity": "low",
-        "attempts": 0,
-        "tech_stack": {
-            "backend": ["python"],
-            "frontend": None,
-            "database": None,
-            "testing": ["pytest"],
-            "deployment": ["docker"]
-        }
-    })
+        priority=1,
+        complexity="low"
+    )
+
+    add_feature(
+        "Dependencies configuration",
+        "Create requirements.txt with all necessary Python dependencies",
+        [
+            "requirements.txt file created",
+            "All core dependencies listed",
+            "Version pinning configured"
+        ],
+        priority=1,
+        complexity="low"
+    )
+
+    add_feature(
+        "Git configuration",
+        "Initialize git repository and create .gitignore",
+        [
+            "Git repository initialized",
+            ".gitignore file created",
+            "Python-specific ignores configured"
+        ],
+        priority=1,
+        complexity="low"
+    )
+
+    # === REST API SPECIFIC FEATURES ===
+    if project_type == "rest_api":
+        add_feature(
+            "FastAPI application initialization",
+            "Create main FastAPI application with basic configuration",
+            [
+                "FastAPI app instance created",
+                "Main application file created",
+                "CORS middleware configured"
+            ],
+            priority=1,
+            complexity="low"
+        )
+
+        add_feature(
+            "Health check endpoint",
+            "Implement GET /health endpoint for monitoring",
+            [
+                "Endpoint returns 200 status",
+                "Response includes timestamp",
+                "Endpoint documented in OpenAPI"
+            ],
+            priority=1,
+            complexity="low"
+        )
+
+        # Check if user wants custom endpoint (parse description)
+        if "endpoint" in project_description.lower() or "GET" in project_description:
+            add_feature(
+                "Custom GET endpoint implementation",
+                "Implement the main GET endpoint as per requirements",
+                [
+                    "Endpoint created and functional",
+                    "Returns expected response",
+                    "Proper HTTP status codes"
+                ],
+                priority=1,
+                complexity="medium"
+            )
+
+        add_feature(
+            "Environment variables setup",
+            "Configure environment variables and .env file",
+            [
+                ".env.example file created",
+                "Environment variables loaded",
+                "Configuration validated"
+            ],
+            priority=2,
+            complexity="low"
+        )
+
+        add_feature(
+            "Logging configuration",
+            "Set up structured logging for the application",
+            [
+                "Logger configured",
+                "Log levels defined",
+                "Request/response logging works"
+            ],
+            priority=2,
+            complexity="low"
+        )
+
+        add_feature(
+            "Error handling middleware",
+            "Implement global error handling middleware",
+            [
+                "Custom exception handlers created",
+                "Proper error responses returned",
+                "500 errors logged"
+            ],
+            priority=2,
+            complexity="medium"
+        )
+
+        add_feature(
+            "API documentation (OpenAPI/Swagger)",
+            "Ensure Swagger UI is accessible and documented",
+            [
+                "Swagger UI accessible at /docs",
+                "All endpoints documented",
+                "Request/response schemas defined"
+            ],
+            priority=2,
+            complexity="low"
+        )
+
+        add_feature(
+            "Request validation",
+            "Implement Pydantic models for request validation",
+            [
+                "Pydantic models created",
+                "Validation errors handled properly",
+                "Type hints used"
+            ],
+            priority=2,
+            complexity="medium"
+        )
+
+        add_feature(
+            "Unit tests for endpoints",
+            "Write unit tests for all API endpoints",
+            [
+                "Test file created",
+                "All endpoints have tests",
+                "Tests pass successfully"
+            ],
+            priority=2,
+            complexity="medium"
+        )
+
+        add_feature(
+            "Pytest configuration",
+            "Configure pytest with coverage and fixtures",
+            [
+                "pytest.ini created",
+                "Test fixtures defined",
+                "Coverage threshold set"
+            ],
+            priority=2,
+            complexity="low"
+        )
+
+        add_feature(
+            "Docker configuration",
+            "Create Dockerfile and docker-compose.yml",
+            [
+                "Dockerfile created",
+                "docker-compose.yml created",
+                "Application runs in container"
+            ],
+            priority=3,
+            complexity="medium"
+        )
+
+        add_feature(
+            "README documentation",
+            "Write comprehensive README with setup instructions",
+            [
+                "README.md created",
+                "Setup instructions included",
+                "API endpoints documented"
+            ],
+            priority=3,
+            complexity="low"
+        )
+
+    # === WEB APP SPECIFIC FEATURES ===
+    elif project_type == "web_app":
+        add_feature(
+            "Frontend project setup",
+            "Initialize React/TypeScript frontend project",
+            [
+                "Frontend directory created",
+                "React app initialized",
+                "TypeScript configured"
+            ],
+            priority=1,
+            complexity="medium"
+        )
+
+        add_feature(
+            "Backend API initialization",
+            "Set up FastAPI backend with database",
+            [
+                "FastAPI app created",
+                "Database connection configured",
+                "API routes defined"
+            ],
+            priority=1,
+            complexity="medium"
+        )
+
+    # === CLI TOOL SPECIFIC FEATURES ===
+    elif project_type == "cli_tool":
+        add_feature(
+            "CLI framework setup",
+            "Initialize Click-based CLI application",
+            [
+                "Click installed",
+                "Main CLI group created",
+                "Entry point configured"
+            ],
+            priority=1,
+            complexity="low"
+        )
 
     return features
 
 
 @tool
-def select_next_feature(feature_list: list[dict]) -> Optional[dict]:
+def select_next_feature(runtime) -> Optional[dict]:
     """
     Select the next highest-priority pending feature
 
+    Reads feature_list.json from repo_path and returns the highest-priority
+    pending feature.
+
     Args:
-        feature_list: List of all features
+        runtime: ToolRuntime for accessing state (repo_path)
 
     Returns:
         Next feature to implement, or None if all done
 
     Selection logic:
-    1. Filter for "pending" status
-    2. Sort by priority (1 = highest)
-    3. Return first feature
+    1. Read feature_list.json from repo_path
+    2. Filter for "pending" status
+    3. Sort by priority (1 = highest)
+    4. Return first feature
+
+    Example:
+        >>> select_next_feature(runtime)
+        {"id": "f-001", "title": "...", "status": "pending", ...}
     """
+    repo_path = runtime.state.get("repo_path", "")
+    feature_list_path = os.path.join(repo_path, "feature_list.json")
+
+    if not os.path.exists(feature_list_path):
+        return None
+
+    with open(feature_list_path, "r", encoding="utf-8") as f:
+        feature_list = json.load(f)
+
     pending_features = [
         f for f in feature_list
         if f.get("status") == "pending"
@@ -105,15 +369,17 @@ def select_next_feature(feature_list: list[dict]) -> Optional[dict]:
 def update_feature_status(
     feature_id: str,
     new_status: str,
-    feature_list_path: str
+    runtime
 ) -> str:
     """
     Update feature status in feature_list.json
 
+    Automatically reads feature_list.json from repo_path in state.
+
     Args:
         feature_id: Feature ID (e.g., "f-001")
         new_status: New status (pending, in_progress, testing, done, failed)
-        feature_list_path: Path to feature_list.json
+        runtime: ToolRuntime for accessing state (repo_path)
 
     Returns:
         Success message
@@ -124,14 +390,24 @@ def update_feature_status(
     - testing: Implementation done, in testing
     - done: Completed and tested
     - failed: Failed after max retries
+
+    Example:
+        >>> update_feature_status("f-001", "testing", runtime)
+        "Feature f-001 status updated to testing"
     """
     valid_statuses = ["pending", "in_progress", "testing", "done", "failed"]
 
     if new_status not in valid_statuses:
         return f"Error: Invalid status '{new_status}'. Must be one of: {valid_statuses}"
 
+    repo_path = runtime.state.get("repo_path", "")
+    feature_list_path = os.path.join(repo_path, "feature_list.json")
+
+    if not os.path.exists(feature_list_path):
+        return f"Error: feature_list.json not found at {feature_list_path}"
+
     try:
-        with open(feature_list_path, "r") as f:
+        with open(feature_list_path, "r", encoding="utf-8") as f:
             features = json.load(f)
 
         # Find and update feature
@@ -158,17 +434,30 @@ def update_feature_status(
 
 
 @tool
-def get_feature_by_id(feature_id: str, feature_list: list[dict]) -> Optional[dict]:
+def get_feature_by_id(feature_id: str, runtime) -> Optional[dict]:
     """
-    Get a specific feature by ID
+    Get a specific feature by ID from feature_list.json
 
     Args:
-        feature_id: Feature ID to find
-        feature_list: List of all features
+        feature_id: Feature ID to find (e.g., "f-001")
+        runtime: ToolRuntime for accessing state (repo_path)
 
     Returns:
         Feature dict or None if not found
+
+    Example:
+        >>> get_feature_by_id("f-001", runtime)
+        {"id": "f-001", "title": "...", "status": "pending", ...}
     """
+    repo_path = runtime.state.get("repo_path", "")
+    feature_list_path = os.path.join(repo_path, "feature_list.json")
+
+    if not os.path.exists(feature_list_path):
+        return None
+
+    with open(feature_list_path, "r", encoding="utf-8") as f:
+        feature_list = json.load(f)
+
     for feature in feature_list:
         if feature.get("id") == feature_id:
             return feature

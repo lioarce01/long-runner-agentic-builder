@@ -11,12 +11,27 @@ Compatible with:
 
 from langchain.agents import create_agent
 from langchain_core.tools import tool
+from langchain.tools import ToolRuntime
 from src.utils.model import get_initializer_model
+from src.state.schemas import AppBuilderState
 from src.tools.feature_tools import (
     generate_feature_list_from_description,
     update_feature_status
 )
 from src.tools.git_tools import create_git_repo, create_git_commit
+from src.tools.github_tools import (
+    create_github_repo,
+    push_to_github,
+    add_github_remote
+)
+from src.tools.filesystem_tools import (
+    create_directory,
+    write_file,
+    read_file,
+    list_directory,
+    file_exists
+)
+from src.mcp_config.client import get_mcp_tools
 import os
 import json
 from datetime import datetime
@@ -26,21 +41,21 @@ from typing import Optional
 # Additional tools specific to Initializer Agent
 
 @tool
-def create_init_script(repo_path: str, tech_stack: dict) -> str:
+def create_init_script(tech_stack: dict, runtime: ToolRuntime) -> str:
     """
     Create init.sh script tailored to the inferred tech stack
 
     Args:
-        repo_path: Path to repository
         tech_stack: Inferred technology stack
 
     Returns:
         Path to created init.sh script
 
     Example:
-        >>> create_init_script("/path/to/repo", {"backend": ["python", "fastapi"]})
+        >>> create_init_script({"backend": ["python", "fastapi"]})
         "/path/to/repo/init.sh"
     """
+    repo_path = runtime.state["repo_path"]
     backend = tech_stack.get("backend", [])
     frontend = tech_stack.get("frontend")
     database = tech_stack.get("database")
@@ -140,17 +155,17 @@ def create_init_script(repo_path: str, tech_stack: dict) -> str:
 
 
 @tool
-def initialize_progress_log(repo_path: str, project_metadata: dict) -> str:
+def initialize_progress_log(project_metadata: dict, runtime: ToolRuntime) -> str:
     """
     Create initial progress_log.json file
 
     Args:
-        repo_path: Path to repository
         project_metadata: Project metadata dict
 
     Returns:
         Path to created progress_log.json
     """
+    repo_path = runtime.state["repo_path"]
     log_entry = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "agent": "initializer",
@@ -172,24 +187,28 @@ def initialize_progress_log(repo_path: str, project_metadata: dict) -> str:
 
 
 @tool
-def save_feature_list(repo_path: str, features: list[dict]) -> str:
+def save_feature_list(features: list[dict], runtime: ToolRuntime) -> str:
     """
     Save feature list to feature_list.json
 
     Args:
-        repo_path: Path to repository
         features: List of feature dictionaries
+        runtime: Tool runtime for state access
 
     Returns:
         Path to created feature_list.json
+
+    Note:
+        State update happens in the orchestrator wrapper, not here
     """
+    repo_path = runtime.state["repo_path"]
     feature_path = os.path.join(repo_path, "feature_list.json")
     os.makedirs(repo_path, exist_ok=True)
 
     with open(feature_path, "w", encoding="utf-8") as f:
         json.dump(features, f, indent=2)
 
-    return feature_path
+    return f"Saved {len(features)} features to {feature_path}"
 
 
 @tool
@@ -248,37 +267,58 @@ def analyze_project_requirements(project_description: str) -> dict:
 
 
 # Create Initializer Agent with LangChain 1.0 pattern
-def create_initializer_agent():
+async def create_initializer_agent():
     """
     Create the Initializer Agent using LangChain 1.0's create_agent
+
+    This function is async because it needs to load tools from MCP servers.
 
     Returns:
         Compiled agent
     """
     # Load system prompt
     prompt_path = "config/prompts/initializer.txt"
-    with open(prompt_path, "r") as f:
+    with open(prompt_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
 
     # Get model
     model = get_initializer_model()
 
-    # Define tools
-    tools = [
+    # Load MCP tools (filesystem, git, github)
+    mcp_tools = await get_mcp_tools()
+
+    # Define custom tools
+    # NOTE: Initializer should ONLY have specialized bootstrap tools,
+    # NOT general filesystem tools like write_file/create_directory
+    custom_tools = [
+        # Project analysis
         analyze_project_requirements,
         generate_feature_list_from_description,
+        # Git operations
         create_git_repo,
+        create_git_commit,
+        # GitHub operations
+        create_github_repo,
+        push_to_github,
+        add_github_remote,
+        # Project setup (specialized tools for specific files)
         create_init_script,
         initialize_progress_log,
         save_feature_list,
-        create_git_commit,
     ]
 
-    # Create agent using LangChain 1.0 pattern
+    # Combine all tools
+    tools = custom_tools + mcp_tools
+
+    print(f"✅ Initializer agent: {len(custom_tools)} custom tools (bootstrap only, NO general filesystem tools) + {len(mcp_tools)} MCP tools")
+
+    # Create agent using LangChain 1.0 pattern with custom state schema
+    # NOTE: create_agent() handles tool binding internally, no need for bind_tools()
     agent = create_agent(
         model,
         tools=tools,
-        system_prompt=system_prompt
+        system_prompt=system_prompt,
+        state_schema=AppBuilderState
     )
 
     return agent
