@@ -26,7 +26,7 @@ Every time they start a new session, they begin with a blank slate. They can't m
 
 ### 1. **Stateful Multi-Agent Architecture**
 
-Instead of one monolithic AI, we use **4 specialized agents** that work together like a real development team:
+Instead of one monolithic AI, we use **5 specialized agents** that work together like a real development team:
 
 ```
 ┌─────────────────┐
@@ -35,8 +35,13 @@ Instead of one monolithic AI, we use **4 specialized agents** that work together
 └─────────────────┘
          ↓
 ┌─────────────────┐
+│    GITOPS       │  Creates Git repo, initial commit,
+│     AGENT       │  creates GitHub repo, first push
+└─────────────────┘
+         ↓
+┌─────────────────┐
 │    CODING       │  Implements features incrementally,
-│     AGENT       │  writes clean code, creates commits
+│     AGENT       │  writes clean, production-ready code
 └─────────────────┘
          ↓
 ┌─────────────────┐
@@ -49,10 +54,22 @@ Instead of one monolithic AI, we use **4 specialized agents** that work together
 │     AGENT       │  marks features complete
 └─────────────────┘
          ↓
+┌─────────────────┐
+│    GITOPS       │  Commits feature changes with conventional
+│     AGENT       │  commit messages, pushes to GitHub
+└─────────────────┘
+         ↓
     (loops back to Coding for next feature)
 ```
 
 Each agent is specialized, focused, and **maintains state across sessions**.
+
+**Key Design Decision: Dedicated GitOps Agent**
+
+Git operations (commits, pushes, GitHub repo creation) are handled by a specialized GitOps Agent rather than being embedded in other agents. This ensures:
+- **Reliable commits**: Git operations always happen, regardless of LLM behavior
+- **Conventional commits**: Consistent commit message format (`feat:`, `fix:`, `docs:`, etc.)
+- **Clear separation**: Coding agents focus on code, GitOps handles version control
 
 ### 2. **Long-Running Task Persistence** (The Hard Part)
 
@@ -93,12 +110,22 @@ Entire workflow state checkpointed to PostgreSQL using LangGraph's built-in pers
 The workflow doesn't just run sequentially—it **makes intelligent decisions**:
 
 ```python
-# After QA approves feature #3...
-route_after_qa(state):
-    if pending_features_exist():
-        return "coding"  # ← Loop back for next feature
+# After Initializer completes...
+route_after_init(state):
+    return "gitops"  # Always go to GitOps for initial commit
+
+# After GitOps completes...
+route_after_gitops(state):
+    if gitops_mode == "init":
+        return "coding"  # Start implementing features
+    elif pending_features_exist():
+        return "coding"  # Next feature
     else:
         return "END"     # All done!
+
+# After QA approves a feature...
+route_after_qa(state):
+    return "gitops"  # Always commit feature changes
 
 # This enables processing 50+ features autonomously
 ```
@@ -138,7 +165,8 @@ route_after_qa(state):
 - E2E tested with Playwright
 
 **Every project includes:**
-- Git repository with meaningful commits
+- Git repository with conventional commits (`feat:`, `fix:`, `docs:`)
+- GitHub repository auto-created and synced
 - Comprehensive test suite (E2E/API/unit)
 - README with setup instructions
 - CHANGELOG with feature history
@@ -169,9 +197,12 @@ sync_feature_list_from_disk(state, repo_path):
 
 This pattern ensures **disk files are always the source of truth**—agents can inspect `progress_log.json` to understand what to do next, even after days of inactivity.
 
-### **Claude Sonnet 4.5 / Gemini 2.0 Flash**
-- Sonnet for complex reasoning and code generation
-- Gemini for cost-effective testing and documentation
+### **Multi-Model Support**
+- **Initializer**: Claude Sonnet / Gemini for requirements analysis
+- **Coding**: High-capability model for code generation
+- **Testing**: Cost-effective model for test execution
+- **QA/Doc**: Documentation-focused model
+- **GitOps**: Lightweight model for commit message generation
 - Model-agnostic design: Swap models without changing code
 
 ---
@@ -190,7 +221,15 @@ Every decision, every code change, every test run—logged with timestamps and r
 - Code quality issues? System refactors automatically
 - Stuck in a loop? Maximum retry limits prevent infinite loops
 
-### 4. **Production-Ready Output**
+### 4. **Dedicated GitOps Agent**
+Version control is handled by a specialized agent that:
+- Creates Git repositories and GitHub remotes automatically
+- Generates meaningful commit messages following conventional commits
+- Commits after each feature completion (not just at the end)
+- Pushes to GitHub after every significant change
+- Provides full traceability of code evolution
+
+### 5. **Production-Ready Output**
 This isn't prototype code. Every generated app includes:
 - Error handling and validation
 - Security best practices (no SQL injection, XSS protection)
@@ -239,28 +278,34 @@ This pattern applies after **every agent execution**, ensuring the workflow stat
 ```
 ┌──────────────────────┐
 │  Coding Agent        │
-│  (calls tools)       │
+│  (implements code)   │
 └──────────┬───────────┘
            │
            ↓
 ┌──────────────────────┐
-│  update_feature_      │
-│  status() tool       │
+│  Testing Agent       │
+│  (validates feature) │
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│  QA Agent            │
+│  (marks as done)     │
 │  → writes to disk    │
 └──────────┬───────────┘
            │
            ↓
 ┌──────────────────────┐
-│  sync_feature_list   │
-│  _from_disk()        │
-│  → updates state     │
+│  GitOps Agent        │
+│  (commits & pushes)  │
 └──────────┬───────────┘
            │
            ↓
 ┌──────────────────────┐
 │  Router Function     │
 │  (reads fresh state) │
-│  → routes to Testing │
+│  → routes to Coding  │
+│    or END            │
 └──────────────────────┘
 ```
 
@@ -270,19 +315,25 @@ User: "Build an e-commerce platform"
   ↓
 Initializer: Generates 45 features, infers tech stack
   ↓ [state synced]
+GitOps (INIT): Creates Git repo, initial commit, GitHub repo, push
+  ↓
 Coding (f-001): Implements project structure
   ↓ [state synced]
-Testing (f-001): Runs tests → ✅ PASS
+Testing (f-001): Runs tests → PASS
   ↓
 QA (f-001): Quality checks → marks as DONE
-  ↓ [state synced, router sees 44 pending]
+  ↓ [state synced]
+GitOps (FEATURE): Commits "feat(f-001): project structure" → push
+  ↓ [router sees 44 pending]
 Coding (f-002): Implements authentication ← LOOP BACK
   ↓
 ... (repeats for all 45 features)
   ↓
 QA (f-045): Final feature complete
-  ↓ [state synced, router sees 0 pending]
-END: Application complete!
+  ↓
+GitOps (FEATURE): Final commit and push
+  ↓ [router sees 0 pending]
+END: Application complete with full Git history!
 ```
 
 ---
@@ -339,6 +390,11 @@ END: Application complete!
 - No GUI (command-line only)
 
 **Roadmap:**
+- [x] Dedicated GitOps Agent for reliable version control
+- [x] Conventional commits format
+- [x] Automatic GitHub repository creation
+- [ ] Research Agent for web searches and documentation lookup
+- [ ] Memory management (context window optimization)
 - [ ] Human-in-the-loop approval gates for critical decisions
 - [ ] Web UI for non-technical users
 - [ ] Multi-language support (Go, Rust, Java)
@@ -350,23 +406,31 @@ END: Application complete!
 ## Getting Started
 
 **Prerequisites:**
-- Python 3.10+, Docker, PostgreSQL
-- API keys for Google Gemini or Claude
+- Python 3.10+ (3.12 recommended)
+- PostgreSQL (for workflow checkpointing)
+- API keys for Google Gemini, Claude, or OpenAI
+- GitHub token (for automatic repo creation)
 
 **Quick Start:**
 ```bash
-# 1. Setup
-./scripts/setup_dev.sh
+# 1. Install dependencies
+pip install -e .
 
-# 2. Configure
+# 2. Configure environment
 cp .env.production.example .env.development
-# Add your GOOGLE_API_KEY or ANTHROPIC_API_KEY
+# Add your API keys:
+#   GOOGLE_API_KEY=...
+#   ANTHROPIC_API_KEY=...
+#   GITHUB_TOKEN=...
+#   DATABASE_URL=postgresql://...
 
 # 3. Build something
 python src/main.py my-project "Build a REST API for task management"
 
 # 4. Monitor progress
 tail -f output/my-project/progress_log.json
+
+# 5. Check GitHub - your repo is already there!
 ```
 
 **Full documentation:** See [SETUP.md](SETUP.md) for detailed installation instructions.
