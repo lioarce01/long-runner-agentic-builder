@@ -11,14 +11,15 @@ Compatible with LangChain 1.0 create_agent pattern
 """
 
 from langchain_core.tools import tool
-from langchain.tools import ToolRuntime
+from langchain.tools import InjectedState
+from typing_extensions import Annotated
 import subprocess
 import os
 from typing import Optional
 
 
 @tool
-def create_git_repo(runtime: ToolRuntime) -> str:
+def create_git_repo(state: Annotated[dict, InjectedState]) -> str:
     """
     Initialize a new git repository
 
@@ -29,7 +30,7 @@ def create_git_repo(runtime: ToolRuntime) -> str:
         >>> create_git_repo()
         "Git repository initialized at /path/to/project"
     """
-    path = runtime.state["repo_path"]
+    path = state["repo_path"]
     try:
         os.makedirs(path, exist_ok=True)
         result = subprocess.run(
@@ -49,7 +50,7 @@ def create_git_repo(runtime: ToolRuntime) -> str:
 @tool
 def create_git_commit(
     message: str,
-    runtime: ToolRuntime,
+    state: Annotated[dict, InjectedState],
     add_all: bool = True
 ) -> str:
     """
@@ -66,7 +67,7 @@ def create_git_commit(
         >>> create_git_commit("feat: Add login feature")
         "Commit created: abc123def"
     """
-    repo_path = runtime.state["repo_path"]
+    repo_path = state["repo_path"]
     try:
         # Add files if requested
         if add_all:

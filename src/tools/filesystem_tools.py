@@ -6,7 +6,8 @@ and direct control over file operations.
 """
 
 from langchain_core.tools import tool
-from langchain.tools import ToolRuntime
+from langchain.tools import InjectedState
+from typing_extensions import Annotated
 import os
 import json
 from pathlib import Path
@@ -48,7 +49,7 @@ def resolve_path(path: str, repo_path: str) -> str:
 
 
 @tool
-def create_directory(path: str, runtime: ToolRuntime) -> str:
+def create_directory(path: str, state: Annotated[dict, InjectedState]) -> str:
     """
     Create a directory and all parent directories if needed
 
@@ -63,7 +64,7 @@ def create_directory(path: str, runtime: ToolRuntime) -> str:
         >>> create_directory("src/components")
         "Created directory: src/components"
     """
-    repo_path = runtime.state.get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     full_path = resolve_path(path, repo_path)
 
     try:
@@ -77,7 +78,7 @@ def create_directory(path: str, runtime: ToolRuntime) -> str:
 def write_file(
     path: str,
     content: str,
-    runtime: ToolRuntime,
+    state: Annotated[dict, InjectedState],
     create_dirs: bool = True
 ) -> str:
     """
@@ -96,7 +97,7 @@ def write_file(
         >>> write_file("main.py", "print('hello')")
         "Wrote 13 bytes to main.py"
     """
-    repo_path = runtime.state.get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     full_path = resolve_path(path, repo_path)
 
     try:
@@ -117,7 +118,7 @@ def write_file(
 
 
 @tool
-def read_file(path: str, runtime: ToolRuntime) -> str:
+def read_file(path: str, state: Annotated[dict, InjectedState]) -> str:
     """
     Read content from a file
 
@@ -132,7 +133,7 @@ def read_file(path: str, runtime: ToolRuntime) -> str:
         >>> read_file("README.md")
         "# My Project\\n..."
     """
-    repo_path = runtime.state.get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     full_path = resolve_path(path, repo_path)
 
     try:
@@ -148,7 +149,7 @@ def read_file(path: str, runtime: ToolRuntime) -> str:
 
 
 @tool
-def list_directory(path: str, runtime: ToolRuntime, recursive: bool = False) -> str:
+def list_directory(path: str, state: Annotated[dict, InjectedState], recursive: bool = False) -> str:
     """
     List files and directories in a path
 
@@ -164,7 +165,7 @@ def list_directory(path: str, runtime: ToolRuntime, recursive: bool = False) -> 
         >>> list_directory(".")
         '["file1.py", "dir1/", "file2.txt"]'
     """
-    repo_path = runtime.state.get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     full_path = resolve_path(path, repo_path)
 
     try:
@@ -206,7 +207,7 @@ def list_directory(path: str, runtime: ToolRuntime, recursive: bool = False) -> 
 
 
 @tool
-def file_exists(path: str, runtime: ToolRuntime) -> str:
+def file_exists(path: str, state: Annotated[dict, InjectedState]) -> str:
     """
     Check if a file or directory exists
 
@@ -221,7 +222,7 @@ def file_exists(path: str, runtime: ToolRuntime) -> str:
         >>> file_exists("README.md")
         '{"exists": true, "type": "file"}'
     """
-    repo_path = runtime.state.get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     full_path = resolve_path(path, repo_path)
 
     result = {
@@ -239,7 +240,7 @@ def file_exists(path: str, runtime: ToolRuntime) -> str:
 
 
 @tool
-def delete_file(path: str, runtime: ToolRuntime) -> str:
+def delete_file(path: str, state: Annotated[dict, InjectedState]) -> str:
     """
     Delete a file
 
@@ -254,7 +255,7 @@ def delete_file(path: str, runtime: ToolRuntime) -> str:
         >>> delete_file("temp.txt")
         "Deleted file: temp.txt"
     """
-    repo_path = runtime.state.get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     full_path = resolve_path(path, repo_path)
 
     try:
@@ -271,7 +272,7 @@ def delete_file(path: str, runtime: ToolRuntime) -> str:
 
 
 @tool
-def get_file_info(path: str, runtime: ToolRuntime) -> str:
+def get_file_info(path: str, state: Annotated[dict, InjectedState]) -> str:
     """
     Get information about a file or directory
 
@@ -286,7 +287,7 @@ def get_file_info(path: str, runtime: ToolRuntime) -> str:
         >>> get_file_info("README.md")
         '{"size": 1234, "modified": "2025-11-27T...", "type": "file"}'
     """
-    repo_path = runtime.state.get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     full_path = resolve_path(path, repo_path)
 
     try:

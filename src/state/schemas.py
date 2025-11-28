@@ -113,6 +113,9 @@ class AppBuilderState(TypedDict):
     phase: Literal["init", "coding", "testing", "qa", "complete"]
     retry_count: int
     max_retries: int
+    
+    # GitOps mode (tells GitOps agent what to do)
+    gitops_mode: Optional[Literal["init", "feature"]]
 
     # Scripts and paths
     init_script_path: Optional[str]

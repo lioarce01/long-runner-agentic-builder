@@ -19,12 +19,6 @@ from src.tools.feature_tools import (
     update_feature_status,
     get_feature_by_id
 )
-from src.tools.git_tools import (
-    get_git_log,
-    get_git_status,
-    get_git_diff,
-    create_git_commit
-)
 from src.tools.filesystem_tools import (
     create_directory,
     write_file,
@@ -201,6 +195,7 @@ async def create_coding_agent():
     mcp_tools = await get_mcp_tools()
 
     # Define custom tools
+    # NOTE: Git operations removed - GitOps Agent handles all Git/GitHub
     custom_tools = [
         # Feature management
         read_feature_list,
@@ -214,11 +209,6 @@ async def create_coding_agent():
         list_directory,
         file_exists,
         get_file_info,
-        # Git operations
-        get_git_log,
-        get_git_status,
-        get_git_diff,
-        create_git_commit,
         # Progress tracking
         read_progress_log,
         update_progress_log_entry,

@@ -81,3 +81,4 @@ scripts/
 blueprint.md
 implementation_plan.md
 LINKEDIN_POST.md
+test_*.py  # Test scripts for development

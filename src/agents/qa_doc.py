@@ -20,7 +20,6 @@ from src.tools.code_quality import (
     run_all_quality_checks
 )
 from src.tools.feature_tools import update_feature_status
-from src.tools.github_tools import push_to_github
 import os
 import json
 from datetime import datetime
@@ -328,6 +327,7 @@ async def create_qa_doc_agent():
     mcp_tools = await get_mcp_tools()
 
     # Define custom tools
+    # NOTE: Git/GitHub operations removed - GitOps Agent handles all Git/GitHub
     custom_tools = [
         # Code quality
         run_ruff_check,
@@ -345,8 +345,6 @@ async def create_qa_doc_agent():
         update_feature_status,
         # Progress tracking
         update_qa_progress_log,
-        # GitHub operations
-        push_to_github,
     ]
 
     # Combine all tools

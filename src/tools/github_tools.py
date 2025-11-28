@@ -10,7 +10,8 @@ Compatible with LangChain 1.0 create_agent pattern
 """
 
 from langchain_core.tools import tool
-from langchain.tools import ToolRuntime
+from langchain.tools import InjectedState
+from typing_extensions import Annotated
 import os
 import subprocess
 import requests
@@ -21,7 +22,7 @@ from typing import Optional
 def create_github_repo(
     repo_name: str,
     description: str,
-    runtime: ToolRuntime,
+    state: Annotated[dict, InjectedState],
     private: bool = False
 ) -> str:
     """
@@ -71,7 +72,7 @@ def create_github_repo(
             html_url = repo_data["html_url"]
 
             # Save repo URL to state for later use
-            runtime.state["github_repo_url"] = html_url
+            state["github_repo_url"] = html_url
 
             print(f"\n{'='*60}")
             print(f"🎉 GITHUB REPO CREATED")
@@ -93,7 +94,7 @@ def create_github_repo(
 @tool
 def push_to_github(
     repo_name: str,
-    runtime: ToolRuntime,
+    state: Annotated[dict, InjectedState],
     branch: str = "main"
 ) -> str:
     """
@@ -111,7 +112,7 @@ def push_to_github(
         >>> push_to_github("api-test")
         "Pushed to GitHub: https://github.com/username/api-test"
     """
-    repo_path = runtime.state.get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     github_token = os.getenv("GITHUB_TOKEN")
 
     if not github_token:
@@ -193,7 +194,7 @@ def push_to_github(
 @tool
 def add_github_remote(
     repo_name: str,
-    runtime: ToolRuntime,
+    state: Annotated[dict, InjectedState],
     username: Optional[str] = None
 ) -> str:
     """
@@ -211,7 +212,7 @@ def add_github_remote(
         >>> add_github_remote("api-test")
         "Added remote: origin -> https://github.com/username/api-test.git"
     """
-    repo_path = runtime.state.get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     github_token = os.getenv("GITHUB_TOKEN")
 
     if not github_token:

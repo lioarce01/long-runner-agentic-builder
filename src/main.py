@@ -102,7 +102,11 @@ class SoftwareBuilderApp:
         config = {
             "configurable": {
                 "thread_id": thread_id
-            }
+            },
+            # Increase recursion limit for projects with many features
+            # Each feature needs ~4 steps (coding → testing → qa → gitops)
+            # Default 25 is too low for 7+ features
+            "recursion_limit": 150
         }
 
         # Initialize state
