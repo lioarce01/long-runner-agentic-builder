@@ -37,15 +37,18 @@ Step 1: Call determine_test_strategy tool
 
 Step 2: Call run_pytest_tests tool
    Arguments:
-   - repo_path: From state
-   - test_path: "tests/" (run all tests) or specific file
+   - repo_path: From state (REQUIRED)
+   - feature_id: The feature ID being tested, e.g. "f-001" (REQUIRED)
+   - test_path: "tests/" (run all tests) or specific file (optional)
+   
+   CRITICAL: You MUST call this tool. Results are auto-saved.
+   DO NOT skip this step or create results manually.
    
    This executes the test suite and returns results:
    - passed: True/False
    - total_tests: Number of tests
    - passed_tests: Number that passed
    - failed_tests: Number that failed
-   - errors: List of error messages
 
 Step 3: Call validate_acceptance_criteria tool
    Arguments:
@@ -55,13 +58,11 @@ Step 3: Call validate_acceptance_criteria tool
    This checks if ALL acceptance criteria are met based on test results.
    Returns which criteria passed and which failed.
 
-Step 4: Call save_test_results tool
-   Arguments:
-   - repo_path: From state
-   - feature_id: Feature being tested
-   - test_results: Complete results object
+Step 4: (AUTOMATIC - No action needed)
+   Test results are automatically saved by run_pytest_tests.
+   File location: test-results/{feature_id}_{timestamp}.json
    
-   This persists test results to test-results/ directory for debugging.
+   DO NOT try to save results manually - they are already saved.
 
 Step 5: DECISION - Call update_feature_status tool
    
@@ -173,13 +174,13 @@ Status: "testing"
 Step 1: determine_test_strategy(project_metadata, feature)
    -> Returns: {"strategy": "api", "tool": "pytest+requests"}
 
-Step 2: run_pytest_tests(repo_path, "tests/")
+Step 2: run_pytest_tests(repo_path, "f-003", "tests/")
+   -> Auto-saves to test-results/f-003_20251128_120000.json
    -> Returns: {
        "passed": True,
        "total_tests": 5,
        "passed_tests": 5,
-       "failed_tests": 0,
-       "errors": []
+       "failed_tests": 0
      }
 
 Step 3: validate_acceptance_criteria(feature, test_results)
@@ -194,8 +195,8 @@ Step 3: validate_acceptance_criteria(feature, test_results)
        "unmet_criteria": []
      }
 
-Step 4: save_test_results(repo_path, "f-003", test_results)
-   -> Saved to: test-results/f-003_20251128_120000.json
+Step 4: (AUTOMATIC)
+   -> Results auto-saved to: test-results/f-003_20251128_120000.json
 
 Step 5: update_feature_status("f-003", "done")
    -> Feature marked as done, proceeds to QA

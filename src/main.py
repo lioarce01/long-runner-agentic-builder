@@ -112,6 +112,7 @@ class SoftwareBuilderApp:
         # Initialize state
         initial_state: AppBuilderState = {
             "messages": [HumanMessage(content=project_description)],
+            "original_prompt": project_description,  # Preserved for message cleanup
             "project_metadata": {
                 "name": project_name,
                 "type": "unknown",  # Will be inferred by Initializer

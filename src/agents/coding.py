@@ -27,7 +27,14 @@ from src.tools.filesystem_tools import (
     file_exists,
     get_file_info
 )
-from src.tools.test_tools import run_pytest_tests
+# NOTE: run_pytest_tests removed - only Testing Agent should execute tests
+# Coding Agent must mark feature as "testing" and let router handle the flow
+from src.tools.memory_tools import (
+    save_decision,
+    save_pattern,
+    save_lesson,
+    read_memory
+)
 import os
 import json
 import subprocess
@@ -214,7 +221,11 @@ async def create_coding_agent():
         update_progress_log_entry,
         # Development workflow
         run_init_script,
-        run_pytest_tests,
+        # Memory management (Phase 2)
+        read_memory,        # Read previous decisions/patterns/lessons
+        save_decision,      # Save architecture decisions
+        save_pattern,       # Save reusable code patterns
+        save_lesson,        # Save problems encountered and solutions
     ]
 
     # Combine all tools

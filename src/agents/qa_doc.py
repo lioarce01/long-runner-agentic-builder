@@ -117,12 +117,14 @@ def update_changelog(
         content += "\n## [Unreleased]\n\n### Added\n\n### Changed\n\n### Fixed\n\n"
 
     # Add feature to appropriate section
-    feature_line = f"- {feature['title']} ({feature['id']}) - {commit_sha}\n"
+    feature_title = feature.get('title', 'Unknown Feature')
+    feature_id = feature.get('id', 'unknown')
+    feature_line = f"- {feature_title} ({feature_id}) - {commit_sha}\n"
 
     # Determine section based on feature
-    if "fix" in feature['title'].lower() or "bug" in feature['title'].lower():
+    if "fix" in feature_title.lower() or "bug" in feature_title.lower():
         section = "### Fixed"
-    elif "update" in feature['title'].lower() or "improve" in feature['title'].lower():
+    elif "update" in feature_title.lower() or "improve" in feature_title.lower():
         section = "### Changed"
     else:
         section = "### Added"
@@ -191,19 +193,19 @@ def generate_feature_documentation(
     docs_dir = os.path.join(repo_path, "docs", "features")
     os.makedirs(docs_dir, exist_ok=True)
 
-    doc_file = os.path.join(docs_dir, f"{feature['id']}.md")
+    doc_file = os.path.join(docs_dir, f"{feature.get('id', 'unknown')}.md")
 
     # Generate documentation content
-    doc_content = f"""# {feature['title']}
+    doc_content = f"""# {feature.get('title', 'Untitled Feature')}
 
-**ID**: {feature['id']}
-**Status**: {feature['status']}
-**Priority**: {feature['priority']}
-**Complexity**: {feature['complexity']}
+**ID**: {feature.get('id', 'unknown')}
+**Status**: {feature.get('status', 'unknown')}
+**Priority**: {feature.get('priority', 'N/A')}
+**Complexity**: {feature.get('complexity', 'N/A')}
 
 ## Description
 
-{feature['description']}
+{feature.get('description', 'No description provided.')}
 
 ## Acceptance Criteria
 

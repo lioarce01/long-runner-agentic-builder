@@ -174,23 +174,24 @@ async def create_test_agent():
     mcp_tools = await get_mcp_tools()
 
     # Define custom tools
+    # run_pytest_tests now auto-saves real results to test-results/
     custom_tools = [
-        # Testing tools
+        # Testing tools (auto-save results)
         run_playwright_tests,
         run_pytest_tests,
         validate_acceptance_criteria,
         # Test strategy
         determine_test_strategy,
-        # Results management
-        save_test_results,
-        capture_test_screenshot,
         # Feature status
         update_feature_status,
     ]
 
     # Combine all tools
-    tools = custom_tools + mcp_tools
-    print(f"✅ Testing agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
+    # CRITICAL: NO MCP tools for Testing Agent to prevent result fabrication
+    # The LLM was using MCP filesystem tools to create fake test-results JSON files
+    # Now it can ONLY call run_pytest_tests which executes real pytest
+    tools = custom_tools  # NO mcp_tools
+    print(f"✅ Testing agent: {len(custom_tools)} custom tools (NO MCP - prevents result fabrication)")
 
     # Create agent using LangChain 1.0 pattern with custom state schema
     # NOTE: create_agent() handles tool binding internally, no need for bind_tools()

@@ -101,78 +101,161 @@ def run_playwright_tests(
         }
 
 
+def _parse_pytest_output(stdout: str, returncode: int) -> dict:
+    """
+    Parse pytest verbose output to extract test counts
+    
+    Parses lines like:
+    - "5 passed" or "5 passed, 2 failed"
+    - "PASSED" / "FAILED" markers in verbose output
+    """
+    import re
+    
+    total_tests = 0
+    passed_tests = 0
+    failed_tests = 0
+    
+    # Try to find summary line like "5 passed, 2 failed, 1 error"
+    summary_pattern = r'(\d+)\s+(passed|failed|error|skipped|warning)'
+    matches = re.findall(summary_pattern, stdout, re.IGNORECASE)
+    
+    for count, status in matches:
+        count = int(count)
+        status = status.lower()
+        if status == 'passed':
+            passed_tests = count
+        elif status == 'failed':
+            failed_tests = count
+        total_tests += count if status in ['passed', 'failed'] else 0
+    
+    # If no summary found, count PASSED/FAILED lines in verbose output
+    if total_tests == 0:
+        passed_tests = len(re.findall(r'\bPASSED\b', stdout))
+        failed_tests = len(re.findall(r'\bFAILED\b', stdout))
+        total_tests = passed_tests + failed_tests
+    
+    return {
+        "passed": returncode == 0 and failed_tests == 0,
+        "total_tests": total_tests,
+        "passed_tests": passed_tests,
+        "failed_tests": failed_tests
+    }
+
+
+def _save_test_results(repo_path: str, feature_id: str, results: dict) -> str:
+    """
+    Auto-save test results to test-results/ directory
+    This is NOT a tool - it's called automatically by run_pytest_tests
+    """
+    from datetime import datetime
+    
+    results_dir = os.path.join(repo_path, "test-results")
+    os.makedirs(results_dir, exist_ok=True)
+    
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    results_file = os.path.join(results_dir, f"{feature_id}_{timestamp}.json")
+    
+    with open(results_file, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2)
+    
+    print(f"\n[AUTO-SAVED] Test results: {results_file}")
+    return results_file
+
+
 @tool
 def run_pytest_tests(
     repo_path: str,
+    feature_id: str,
     test_path: Optional[str] = None,
     verbose: bool = True
 ) -> dict:
     """
-    Run pytest unit/integration tests
+    Run pytest unit/integration tests and AUTO-SAVE results
 
     Args:
         repo_path: Path to repository
+        feature_id: Feature ID being tested (e.g., "f-001") - REQUIRED for result tracking
         test_path: Optional specific test file/directory
         verbose: Enable verbose output (default: True)
 
     Returns:
-        Test results dictionary
+        Test results dictionary with pass/fail counts
+        Results are automatically saved to test-results/{feature_id}_{timestamp}.json
 
     Example:
-        >>> run_pytest_tests("/path/to/repo", "tests/unit")
+        >>> run_pytest_tests("/path/to/repo", "f-001", "tests/")
         {"passed": True, "total_tests": 10, "passed_tests": 10, ...}
     """
+    print(f"\n{'='*50}")
+    print(f"RUNNING PYTEST for {feature_id}")
+    print(f"  repo: {repo_path}")
+    print(f"  test_path: {test_path or 'tests/'}")
+    print(f"{'='*50}")
+    
     try:
+        # Build command - NO json-report plugin required
         cmd = ["pytest"]
         if test_path:
             cmd.append(test_path)
         if verbose:
             cmd.append("-v")
-
-        # Add JSON output
-        cmd.extend(["--json-report", "--json-report-file=/tmp/pytest_report.json"])
-
+        
+        # Add extra flags for better output parsing
+        cmd.append("--tb=short")  # Short traceback for errors
+        
         result = subprocess.run(
             cmd,
             cwd=repo_path,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=180  # 3 minute timeout for unit tests
         )
 
-        # Try to parse JSON report
-        try:
-            with open("/tmp/pytest_report.json", "r") as f:
-                report = json.load(f)
-
-            return {
-                "passed": result.returncode == 0,
-                "total_tests": report.get("summary", {}).get("total", 0),
-                "passed_tests": report.get("summary", {}).get("passed", 0),
-                "failed_tests": report.get("summary", {}).get("failed", 0),
-                "stdout": result.stdout,
-                "stderr": result.stderr
-            }
-        except (FileNotFoundError, json.JSONDecodeError):
-            # Fallback: parse from stdout
-            return {
-                "passed": result.returncode == 0,
-                "stdout": result.stdout,
-                "stderr": result.stderr
-            }
+        # Parse pytest output to get test counts
+        parsed = _parse_pytest_output(result.stdout, result.returncode)
+        
+        test_results = {
+            "passed": parsed["passed"],
+            "total_tests": parsed["total_tests"],
+            "passed_tests": parsed["passed_tests"],
+            "failed_tests": parsed["failed_tests"],
+            "stdout": result.stdout,
+            "stderr": result.stderr
+        }
+        
+        # AUTO-SAVE results (cannot be faked by LLM)
+        _save_test_results(repo_path, feature_id, test_results)
+        
+        print(f"  Result: {'PASSED' if parsed['passed'] else 'FAILED'}")
+        print(f"  Tests: {parsed['passed_tests']}/{parsed['total_tests']} passed")
+        print(f"{'='*50}\n")
+        
+        return test_results
 
     except subprocess.TimeoutExpired:
-        return {
+        test_results = {
             "passed": False,
+            "total_tests": 0,
+            "passed_tests": 0,
+            "failed_tests": 0,
             "stdout": "",
             "stderr": "Test execution timed out after 3 minutes"
         }
+        _save_test_results(repo_path, feature_id, test_results)
+        return test_results
+        
     except Exception as e:
-        return {
+        test_results = {
             "passed": False,
+            "total_tests": 0,
+            "passed_tests": 0,
+            "failed_tests": 0,
             "stdout": "",
             "stderr": f"Error running pytest: {e}"
         }
+        _save_test_results(repo_path, feature_id, test_results)
+        return test_results
 
 
 @tool

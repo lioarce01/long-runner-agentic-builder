@@ -454,19 +454,21 @@ def generate_feature_list_from_description(
 @tool
 def select_next_feature(state: Annotated[dict, InjectedState]) -> Optional[dict]:
     """
-    Select the next highest-priority pending feature
+    Select the next feature to work on
 
-    Reads feature_list.json from repo_path and returns the highest-priority
-    pending feature.
+    Priority order:
+    1. Features in "testing" status (need retry after test failure)
+    2. Features in "pending" status (new features)
 
     Returns:
         Next feature to implement, or None if all done
 
     Selection logic:
     1. Read feature_list.json from repo_path
-    2. Filter for "pending" status
-    3. Sort by priority (1 = highest)
-    4. Return first feature
+    2. FIRST: Check for "testing" features (need retry)
+    3. THEN: Check for "pending" features (new work)
+    4. Sort by priority (1 = highest)
+    5. Return first feature
 
     Example:
         >>> select_next_feature(state)
@@ -481,6 +483,26 @@ def select_next_feature(state: Annotated[dict, InjectedState]) -> Optional[dict]
     with open(feature_list_path, "r", encoding="utf-8") as f:
         feature_list = json.load(f)
 
+    # Helper to safely get priority as int
+    def get_priority(f):
+        p = f.get("priority", 999)
+        return int(p) if isinstance(p, (int, str)) and str(p).isdigit() else 999
+
+    # PRIORITY 1: Features that need retry (status = "testing" means tests failed)
+    # These should be fixed before starting new features
+    testing_features = [
+        f for f in feature_list
+        if f.get("status") == "testing"
+    ]
+    
+    if testing_features:
+        # Sort by priority, then by attempts (fewer attempts first)
+        testing_features.sort(key=lambda f: (get_priority(f), f.get("attempts", 0)))
+        selected = testing_features[0]
+        print(f"\n[select_next_feature] Retry feature: {selected['id']} (attempts: {selected.get('attempts', 0)})")
+        return selected
+
+    # PRIORITY 2: New pending features
     pending_features = [
         f for f in feature_list
         if f.get("status") == "pending"
@@ -490,16 +512,18 @@ def select_next_feature(state: Annotated[dict, InjectedState]) -> Optional[dict]
         return None
 
     # Sort by priority (1 is highest)
-    pending_features.sort(key=lambda f: f.get("priority", 999))
-
-    return pending_features[0]
+    pending_features.sort(key=lambda f: get_priority(f))
+    selected = pending_features[0]
+    print(f"\n[select_next_feature] New feature: {selected['id']}")
+    return selected
 
 
 @tool
 def update_feature_status(
     feature_id: str,
     new_status: str,
-    state: Annotated[dict, InjectedState]
+    state: Annotated[dict, InjectedState],
+    increment_attempts: bool = False
 ) -> str:
     """
     Update feature status in feature_list.json
@@ -509,6 +533,7 @@ def update_feature_status(
     Args:
         feature_id: Feature ID (e.g., "f-001")
         new_status: New status (pending, in_progress, testing, done, failed)
+        increment_attempts: If True, increment the attempts counter (for retries)
 
     Returns:
         Success message
@@ -541,10 +566,24 @@ def update_feature_status(
 
         # Find and update feature
         updated = False
+        attempts = 0
         for feature in features:
             if feature["id"] == feature_id:
+                old_status = feature.get("status", "unknown")
                 feature["status"] = new_status
+                
+                # Handle attempts counter
+                if increment_attempts:
+                    feature["attempts"] = feature.get("attempts", 0) + 1
+                    attempts = feature["attempts"]
+                    print(f"[update_feature_status] {feature_id}: attempts incremented to {attempts}")
+                
+                # Reset attempts when feature is done
+                if new_status == "done":
+                    feature["attempts"] = 0
+                
                 updated = True
+                print(f"[update_feature_status] {feature_id}: {old_status} -> {new_status}")
                 break
 
         if not updated:
@@ -554,12 +593,57 @@ def update_feature_status(
         with open(feature_list_path, "w", encoding="utf-8") as f:
             json.dump(features, f, indent=2)
 
-        return f"Feature '{feature_id}' status updated to '{new_status}'"
+        msg = f"Feature '{feature_id}' status updated to '{new_status}'"
+        if increment_attempts:
+            msg += f" (attempt {attempts})"
+        return msg
 
     except FileNotFoundError:
         return f"Error: Feature list file not found: {feature_list_path}"
     except Exception as e:
         return f"Error updating feature status: {e}"
+
+
+@tool
+def increment_feature_attempts(
+    feature_id: str,
+    state: Annotated[dict, InjectedState]
+) -> str:
+    """
+    Increment the attempts counter for a feature (used after test failure)
+
+    Args:
+        feature_id: Feature ID (e.g., "f-001")
+
+    Returns:
+        Success message with current attempt count
+    """
+    repo_path = state.get("repo_path", "")
+    feature_list_path = os.path.join(repo_path, "feature_list.json")
+
+    if not os.path.exists(feature_list_path):
+        return f"Error: feature_list.json not found at {feature_list_path}"
+
+    try:
+        with open(feature_list_path, "r", encoding="utf-8") as f:
+            features = json.load(f)
+
+        for feature in features:
+            if feature["id"] == feature_id:
+                feature["attempts"] = feature.get("attempts", 0) + 1
+                attempts = feature["attempts"]
+                
+                # Write back
+                with open(feature_list_path, "w", encoding="utf-8") as f:
+                    json.dump(features, f, indent=2)
+                
+                print(f"[increment_feature_attempts] {feature_id}: attempts = {attempts}")
+                return f"Feature '{feature_id}' attempts incremented to {attempts}"
+
+        return f"Error: Feature '{feature_id}' not found"
+
+    except Exception as e:
+        return f"Error incrementing attempts: {e}"
 
 
 @tool
@@ -631,6 +715,7 @@ __all__ = [
     "generate_feature_list_from_description",
     "select_next_feature",
     "update_feature_status",
+    "increment_feature_attempts",
     "get_feature_by_id",
     "count_features_by_status",
 ]

@@ -44,7 +44,9 @@ def run_ruff_check(
             cmd,
             cwd=repo_path,
             capture_output=True,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace"  # Replace invalid chars instead of crashing
         )
 
         return {
@@ -100,7 +102,9 @@ def run_mypy_check(
             cmd,
             cwd=repo_path,
             capture_output=True,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace"  # Replace invalid chars instead of crashing
         )
 
         return {

@@ -116,6 +116,9 @@ class AppBuilderState(TypedDict):
     
     # GitOps mode (tells GitOps agent what to do)
     gitops_mode: Optional[Literal["init", "feature"]]
+    
+    # Memory management
+    original_prompt: Optional[str]  # Preserved for message cleanup between features
 
     # Scripts and paths
     init_script_path: Optional[str]

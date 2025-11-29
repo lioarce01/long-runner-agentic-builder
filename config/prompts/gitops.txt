@@ -88,6 +88,10 @@ Step 5: Call push_to_github tool
    - branch: "main"
    
    Pushes commit to GitHub
+   
+   NOTE: Memory cleanup happens AUTOMATICALLY after you complete.
+   The orchestrator will reset conversation history to prevent token overflow.
+   You do NOT need to call any cleanup tool - it's handled for you.
 
 ERROR HANDLING
 
@@ -158,6 +162,7 @@ FEATURE MODE:
 - Descriptive commit message generated
 - create_git_commit called
 - push_to_github called (if remote exists)
+- Memory cleanup happens automatically (orchestrator handles it)
 
 YOU MUST COMPLETE ALL APPLICABLE STEPS BEFORE ENDING YOUR SESSION.
 

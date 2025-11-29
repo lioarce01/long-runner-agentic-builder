@@ -153,22 +153,28 @@ def route_after_testing(state: AppBuilderState) -> Literal["qa_doc", "coding"]:
     Returns:
         Next node name (qa_doc or coding)
     """
+    import os
+    import json
+    
     test_context = state.get("test_context", {})
     test_result = test_context.get("last_result")
     current_feature = state.get("current_feature")
+    repo_path = state.get("repo_path", "")
 
     if not current_feature:
         print("⚠️  No current feature in testing phase")
         return "coding"
 
+    feature_id = current_feature.get("id", "unknown")
+    
     # If feature is marked as "done", tests passed - go to QA
     if current_feature.get("status") == "done":
-        print(f"✅ Feature {current_feature['id']} marked as done. Moving to QA.")
+        print(f"✅ Feature {feature_id} marked as done. Moving to QA.")
         return "qa_doc"
 
     # Check test_result if available
     if test_result and test_result.get("passed"):
-        print(f"✅ Tests passed for {current_feature['id']}. Moving to QA.")
+        print(f"✅ Tests passed for {feature_id}. Moving to QA.")
         return "qa_doc"
 
     # If test_result is None or tests failed - check status and retry count
@@ -177,20 +183,51 @@ def route_after_testing(state: AppBuilderState) -> Literal["qa_doc", "coding"]:
         attempts = current_feature.get("attempts", 0)
 
         if attempts >= 3:
-            # Max retries reached
-            print(f"❌ Feature {current_feature['id']} failed after {attempts} attempts. Marking as failed.")
-            current_feature["status"] = "failed"
-            # Will select next feature in coding phase
+            # Max retries reached - persist status to disk
+            print(f"❌ Feature {feature_id} failed after {attempts} attempts. Marking as failed.")
+            _persist_feature_update(repo_path, feature_id, "failed", attempts)
             return "coding"
 
-        # Retry
-        print(f"⚠️  Tests failed for {current_feature['id']}. Retry attempt {attempts + 1}/3.")
-        current_feature["attempts"] = attempts + 1
+        # Retry - increment attempts and persist to disk
+        new_attempts = attempts + 1
+        print(f"⚠️  Tests failed for {feature_id}. Retry attempt {new_attempts}/3.")
+        _persist_feature_update(repo_path, feature_id, "testing", new_attempts)
         return "coding"
     
     # Default: move to coding to select next feature
-    print(f"⚠️  Unexpected state for {current_feature['id']}. Moving to coding.")
+    print(f"⚠️  Unexpected state for {feature_id}. Moving to coding.")
     return "coding"
+
+
+def _persist_feature_update(repo_path: str, feature_id: str, status: str, attempts: int) -> None:
+    """
+    Helper to persist feature status and attempts to feature_list.json
+    """
+    import os
+    import json
+    
+    feature_list_path = os.path.join(repo_path, "feature_list.json")
+    
+    if not os.path.exists(feature_list_path):
+        print(f"⚠️  Cannot persist: {feature_list_path} not found")
+        return
+    
+    try:
+        with open(feature_list_path, "r", encoding="utf-8") as f:
+            features = json.load(f)
+        
+        for feature in features:
+            if feature.get("id") == feature_id:
+                feature["status"] = status
+                feature["attempts"] = attempts
+                print(f"   [persist] {feature_id}: status={status}, attempts={attempts}")
+                break
+        
+        with open(feature_list_path, "w", encoding="utf-8") as f:
+            json.dump(features, f, indent=2)
+            
+    except Exception as e:
+        print(f"⚠️  Error persisting feature update: {e}")
 
 
 def route_after_qa(state: AppBuilderState) -> Literal["gitops", "END"]:

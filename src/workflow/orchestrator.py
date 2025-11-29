@@ -15,8 +15,9 @@ Compatible with:
 import os
 import json
 from langgraph.graph import StateGraph, START, END
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from src.state.schemas import AppBuilderState
+from src.tools.memory_tools import cleanup_tool_messages, create_feature_context_message
 from src.agents.initializer import create_initializer_agent
 from src.agents.gitops import create_gitops_agent
 from src.agents.coding import create_coding_agent
@@ -230,12 +231,18 @@ START NOW by calling create_git_repo tool.
         else:
             feature_id = current_feature.get("id", "unknown") if current_feature else "unknown"
             feature_title = current_feature.get("title", "Feature") if current_feature else "Feature"
+            
+            # Get compact context from previous agents
+            feature_context = create_feature_context_message(state)
+            
             instruction = SystemMessage(content=f"""
 [GITOPS AGENT INSTRUCTION - FEATURE MODE]
 
 You are the GITOPS AGENT. Execute FEATURE mode workflow.
 
-FEATURE COMPLETED: {feature_id} - {feature_title}
+CONTEXT FROM PREVIOUS AGENTS:
+{feature_context}
+
 REPO PATH: {repo_path}
 
 Execute these steps IN ORDER:
@@ -252,6 +259,25 @@ START NOW by calling get_git_status tool.
 
         # Execute gitops agent with modified state
         result = await gitops_graph.ainvoke(modified_state)
+
+        # AUTOMATIC MEMORY CLEANUP (don't rely on LLM to call the tool)
+        # This runs after FEATURE mode to prevent token overflow
+        if gitops_mode == "feature":
+            original_prompt = state.get("original_prompt", "")
+            current_messages = result.get("messages", [])
+            message_count = len(current_messages)
+            
+            print(f"\n{'='*50}")
+            print(f"MEMORY CLEANUP (automatic)")
+            print(f"{'='*50}")
+            print(f"Feature completed: {feature_id}")
+            print(f"Messages before cleanup: {message_count}")
+            print(f"Messages after cleanup: 1 (original prompt)")
+            print(f"{'='*50}\n")
+            
+            # Reset messages to just the original prompt
+            # This prevents token accumulation across features
+            result["messages"] = [HumanMessage(content=original_prompt)]
 
         return result
 
@@ -301,19 +327,40 @@ DO NOT summarize previous work. START IMPLEMENTING NOW.
         # Coding agent calls update_feature_status tool which writes to disk
         result = sync_feature_list_from_disk(result, repo_path)
 
-        # CRITICAL: Sync current_feature - find feature with status="testing"
-        # This ensures Testing and QA agents can find the feature being worked on
+        # CRITICAL: Sync current_feature - find the feature that was just worked on
+        # The agent should have set a feature to "testing" status
         feature_list = result.get("feature_list", [])
+        
+        # Get the feature ID from messages if possible (the agent should mention it)
+        # Otherwise, find the most recently changed feature
         testing_features = [f for f in feature_list if f.get("status") == "testing"]
+        
         if testing_features:
-            result["current_feature"] = testing_features[0]
-            print(f"✅ Set current_feature to: {testing_features[0]['id']}")
+            # If there's only one testing feature, use it
+            if len(testing_features) == 1:
+                result["current_feature"] = testing_features[0]
+                print(f"✅ Set current_feature to: {testing_features[0]['id']}")
+            else:
+                # Multiple testing features - use the one with lowest priority (worked first)
+                # or the one with most attempts (being retried)
+                testing_features.sort(key=lambda f: (-f.get("attempts", 0), f.get("priority", 999)))
+                result["current_feature"] = testing_features[0]
+                print(f"✅ Set current_feature to: {testing_features[0]['id']} (from {len(testing_features)} testing features)")
         else:
             # Check for in_progress features
             in_progress = [f for f in feature_list if f.get("status") == "in_progress"]
             if in_progress:
                 result["current_feature"] = in_progress[0]
                 print(f"✅ Set current_feature to in_progress: {in_progress[0]['id']}")
+            else:
+                print(f"⚠️  No feature in testing or in_progress state")
+
+        # SELECTIVE CLEANUP: Remove ToolMessages to reduce tokens
+        # Keep last 2 tool messages for immediate context
+        messages_before = len(result.get("messages", []))
+        result["messages"] = cleanup_tool_messages(result["messages"], keep_last_n_tools=2)
+        messages_after = len(result.get("messages", []))
+        print(f"📉 SELECTIVE CLEANUP (coding): {messages_before} → {messages_after} messages")
 
         return result
 
@@ -329,13 +376,18 @@ DO NOT summarize previous work. START IMPLEMENTING NOW.
         print(f"   Feature: {feature_id} - {feature_title}")
         print(f"{'='*60}\n")
 
-        # Add instruction message
+        # Get compact context from previous agent
+        feature_context = create_feature_context_message(state)
+
+        # Add instruction message with injected context
         instruction = SystemMessage(content=f"""
 [TESTING AGENT INSTRUCTION]
 
 You are the TESTING AGENT. Test the feature that was just implemented.
 
-FEATURE TO TEST: {feature_id} - {feature_title}
+CONTEXT FROM CODING AGENT:
+{feature_context}
+
 REPO PATH: {repo_path}
 
 Execute these steps:
@@ -355,19 +407,34 @@ START NOW by calling run_pytest_tests tool.
         # Sync feature_list from disk
         result = sync_feature_list_from_disk(result, repo_path)
 
-        # CRITICAL: Sync current_feature - find feature with status="done"
-        # This ensures QA agent can find the feature that passed testing
+        # CRITICAL: Keep the current_feature we were testing
+        # The feature status may have changed to "done" or stayed as "testing"
         feature_list = result.get("feature_list", [])
-        done_features = [f for f in feature_list if f.get("status") == "done"]
-        if done_features:
-            result["current_feature"] = done_features[0]
-            print(f"✅ Set current_feature to done: {done_features[0]['id']}")
+        
+        # Find the feature we were testing (by ID from original current_feature)
+        if current_feature:
+            for f in feature_list:
+                if f.get("id") == feature_id:
+                    result["current_feature"] = f
+                    new_status = f.get("status", "unknown")
+                    attempts = f.get("attempts", 0)
+                    if new_status == "done":
+                        print(f"✅ Feature {feature_id} passed tests -> done")
+                    else:
+                        print(f"⚠️  Feature {feature_id} still in {new_status} (attempts: {attempts})")
+                    break
         else:
-            # Keep testing feature as current if tests failed
-            testing_features = [f for f in feature_list if f.get("status") == "testing"]
-            if testing_features:
-                result["current_feature"] = testing_features[0]
-                print(f"⚠️  Keeping current_feature as testing: {testing_features[0]['id']}")
+            # Fallback: find any done feature that doesn't have QA yet
+            done_features = [f for f in feature_list if f.get("status") == "done"]
+            if done_features:
+                result["current_feature"] = done_features[0]
+                print(f"✅ Set current_feature to done: {done_features[0]['id']}")
+
+        # SELECTIVE CLEANUP: Remove ToolMessages to reduce tokens
+        messages_before = len(result.get("messages", []))
+        result["messages"] = cleanup_tool_messages(result["messages"], keep_last_n_tools=2)
+        messages_after = len(result.get("messages", []))
+        print(f"📉 SELECTIVE CLEANUP (testing): {messages_before} → {messages_after} messages")
 
         return result
 
@@ -383,13 +450,18 @@ START NOW by calling run_pytest_tests tool.
         print(f"   Feature: {feature_id} - {feature_title}")
         print(f"{'='*60}\n")
 
-        # Add instruction message
+        # Get compact context from previous agents
+        feature_context = create_feature_context_message(state)
+
+        # Add instruction message with injected context
         instruction = SystemMessage(content=f"""
 [QA/DOC AGENT INSTRUCTION]
 
 You are the QA/DOC AGENT. Review and document the completed feature.
 
-FEATURE TO REVIEW: {feature_id} - {feature_title}
+CONTEXT FROM PREVIOUS AGENTS:
+{feature_context}
+
 REPO PATH: {repo_path}
 
 Execute these steps:
@@ -414,6 +486,12 @@ START NOW by calling run_all_quality_checks tool.
 
         # Set gitops_mode to "feature" for next GitOps run
         result["gitops_mode"] = "feature"
+
+        # SELECTIVE CLEANUP: Remove ToolMessages to reduce tokens
+        messages_before = len(result.get("messages", []))
+        result["messages"] = cleanup_tool_messages(result["messages"], keep_last_n_tools=2)
+        messages_after = len(result.get("messages", []))
+        print(f"📉 SELECTIVE CLEANUP (qa_doc): {messages_before} → {messages_after} messages")
 
         return result
 

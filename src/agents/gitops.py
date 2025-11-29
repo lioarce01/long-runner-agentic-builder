@@ -53,7 +53,7 @@ async def create_gitops_agent():
     # Load MCP tools (if any)
     mcp_tools = await get_mcp_tools()
     
-    # Define custom tools - ONLY Git/GitHub operations
+    # after GitOps completes in FEATURE mode (more reliable than LLM calling it)
     custom_tools = [
         # Git operations
         create_git_repo,
