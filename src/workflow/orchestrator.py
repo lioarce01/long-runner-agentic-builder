@@ -283,37 +283,114 @@ START NOW by calling get_git_status tool.
 
     async def coding_node(state: AppBuilderState) -> AppBuilderState:
         """Wrapper for coding agent graph"""
+        import subprocess
+        import platform
+        
         repo_path = state.get("repo_path", "")
         feature_list = state.get("feature_list", [])
         current_feature = state.get("current_feature")
         
-        # Count pending features
+        # AUTO-SETUP: Create project venv and install dependencies (once)
+        # This runs when requirements.txt exists but .venv doesn't
+        requirements_file = os.path.join(repo_path, "requirements.txt")
+        venv_path = os.path.join(repo_path, ".venv")
+        is_windows = platform.system() == "Windows"
+        
+        if os.path.exists(requirements_file) and not os.path.exists(venv_path):
+            print(f"\n{'='*50}")
+            print(f"📦 AUTO-SETUP: Creating project environment")
+            print(f"{'='*50}")
+            
+            # Step 1: Create venv
+            print(f"   Creating venv at {venv_path}...")
+            subprocess.run(
+                ["python", "-m", "venv", ".venv"],
+                cwd=repo_path,
+                capture_output=True,
+                encoding="utf-8"
+            )
+            print(f"   ✅ Venv created")
+            
+            # Step 2: Install dependencies using project's pip
+            if is_windows:
+                pip_path = os.path.join(venv_path, "Scripts", "pip.exe")
+            else:
+                pip_path = os.path.join(venv_path, "bin", "pip")
+            
+            print(f"   Installing dependencies from requirements.txt...")
+            install_result = subprocess.run(
+                [pip_path, "install", "-r", "requirements.txt", "-q"],
+                cwd=repo_path,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            
+            if install_result.returncode == 0:
+                print(f"   ✅ Dependencies installed successfully")
+            else:
+                print(f"   ⚠️  Some dependencies may have failed:")
+                if install_result.stderr:
+                    print(f"   {install_result.stderr[:200]}")
+            
+            print(f"{'='*50}\n")
+        
+        # Count features by status
         pending = [f for f in feature_list if f.get("status") == "pending"]
+        testing = [f for f in feature_list if f.get("status") == "testing"]
         pending_info = ", ".join([f"{f['id']}: {f['title']}" for f in pending[:3]])
 
         print(f"\n{'='*60}")
         print(f"🔍 CODING AGENT STARTING")
         print(f"   Features total: {len(feature_list)}")
-        print(f"   Pending features: {len(pending)}")
+        print(f"   Testing (retry): {len(testing)}")
+        print(f"   Pending: {len(pending)}")
         print(f"   Current feature: {current_feature.get('id') if current_feature else 'None'}")
         print(f"   Repo: {repo_path}")
         print(f"{'='*60}\n")
 
-        # CRITICAL: Add instruction message to guide the agent
-        # This prevents the model from thinking initialization is done
-        instruction = SystemMessage(content=f"""
-[CODING AGENT INSTRUCTION]
+        # Build instruction based on whether this is a retry or new feature
+        if testing:
+            # RETRY MODE: A feature failed tests, fix it
+            retry_feature = testing[0]
+            retry_id = retry_feature.get("id", "unknown")
+            retry_title = retry_feature.get("title", "Feature")
+            retry_attempts = retry_feature.get("attempts", 0)
+            
+            instruction = SystemMessage(content=f"""
+[CODING AGENT INSTRUCTION - RETRY MODE]
 
-You are now the CODING AGENT. Previous agents have completed setup.
+A feature FAILED tests and needs to be fixed.
 
-YOUR TASK: Implement the next feature from the pending list.
+FEATURE TO FIX: {retry_id} - {retry_title}
+ATTEMPTS: {retry_attempts}/3
+
+YOUR TASK:
+1. Call select_next_feature (it will return {retry_id})
+2. Read the test results to understand what failed
+3. Fix the code to make tests pass
+4. Call update_feature_status to mark as "testing" when done
+
+DO NOT call select_next_feature multiple times.
+Call it ONCE, then IMPLEMENT the fix.
+""")
+        else:
+            # NORMAL MODE: Implement next pending feature
+            instruction = SystemMessage(content=f"""
+[CODING AGENT INSTRUCTION - NEW FEATURE]
+
+Implement the next pending feature.
 
 PENDING FEATURES ({len(pending)} total): {pending_info}
 
-IMMEDIATELY call select_next_feature tool to get the next feature to implement.
-Then follow your 6-step workflow to implement it.
+YOUR TASK:
+1. Call select_next_feature ONCE to get the next feature
+2. Implement ALL the code for that feature
+3. Create necessary files (app/, tests/, etc.)
+4. Call update_feature_status to mark as "testing" when done
 
-DO NOT summarize previous work. START IMPLEMENTING NOW.
+DO NOT call select_next_feature multiple times.
+Call it ONCE, then IMPLEMENT the feature completely.
 """)
         
         # Add instruction to messages

@@ -186,6 +186,8 @@ def run_pytest_tests(
         >>> run_pytest_tests("/path/to/repo", "f-001", "tests/")
         {"passed": True, "total_tests": 10, "passed_tests": 10, ...}
     """
+    import platform
+    
     print(f"\n{'='*50}")
     print(f"RUNNING PYTEST for {feature_id}")
     print(f"  repo: {repo_path}")
@@ -193,8 +195,26 @@ def run_pytest_tests(
     print(f"{'='*50}")
     
     try:
-        # Build command - NO json-report plugin required
-        cmd = ["pytest"]
+        # Use the project's venv python to run pytest
+        # This ensures tests run with project dependencies, not multi-agent dependencies
+        is_windows = platform.system() == "Windows"
+        venv_path = os.path.join(repo_path, ".venv")
+        
+        if is_windows:
+            python_path = os.path.join(venv_path, "Scripts", "python.exe")
+        else:
+            python_path = os.path.join(venv_path, "bin", "python")
+        
+        # Check if project venv exists
+        if os.path.exists(python_path):
+            # Use project's python to run pytest as module
+            cmd = [python_path, "-m", "pytest"]
+            print(f"  Using project venv: {python_path}")
+        else:
+            # Fallback to system pytest (for backwards compatibility)
+            cmd = ["pytest"]
+            print(f"  ⚠️  Project venv not found, using system pytest")
+        
         if test_path:
             cmd.append(test_path)
         if verbose:
