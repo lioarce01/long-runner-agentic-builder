@@ -115,7 +115,13 @@ class AppBuilderState(TypedDict):
     max_retries: int
     
     # GitOps mode (tells GitOps agent what to do)
-    gitops_mode: Optional[Literal["init", "feature"]]
+    # "init" = initial commit, "feature" = feature commit, "recovery" = pending commits
+    # "resume" = project in progress (skip gitops), "complete" = all done (go to END)
+    gitops_mode: Optional[Literal["init", "feature", "recovery", "resume", "complete"]]
+    
+    # Recovery management (for handling interrupted operations)
+    recovery_features: Optional[list[Feature]]  # Features needing commit/push
+    recovery_needed: Optional[dict]  # {"needs_commit": [...], "needs_push": [...]}
     
     # Memory management
     original_prompt: Optional[str]  # Preserved for message cleanup between features

@@ -11,11 +11,14 @@ from src.state.schemas import AppBuilderState
 from typing import Literal
 
 
-def route_after_init(state: AppBuilderState) -> Literal["gitops", "END"]:
+def route_after_init(state: AppBuilderState) -> Literal["gitops", "coding", "END"]:
     """
     Route after initialization
 
     Decision logic:
+    - If recovery mode → go to gitops (RECOVERY mode)
+    - If resume mode → go to coding (skip gitops, project in progress)
+    - If complete mode → END (project already done)
     - If feature list generated → go to gitops (INIT mode)
     - Otherwise → END
 
@@ -26,6 +29,36 @@ def route_after_init(state: AppBuilderState) -> Literal["gitops", "END"]:
         Next node name or END
     """
     feature_list = state.get("feature_list", [])
+    gitops_mode = state.get("gitops_mode", "")
+    recovery_features = state.get("recovery_features", [])
+
+    # RECOVERY MODE: Handle interrupted operations from previous run
+    if gitops_mode == "recovery" and recovery_features:
+        print(f"\n{'='*60}")
+        print(f"🔄 RECOVERY: Found {len(recovery_features)} features needing commit/push")
+        print(f"→ Routing to GitOps (RECOVERY mode)")
+        print(f"{'='*60}\n")
+        return "gitops"
+
+    # RESUME MODE: Project in progress, skip gitops and go to coding
+    if gitops_mode == "resume":
+        pending = [f for f in feature_list if f.get("status") == "pending"]
+        testing = [f for f in feature_list if f.get("status") == "testing"]
+        print(f"\n{'='*60}")
+        print(f"🔄 RESUME: Project in progress")
+        print(f"   Pending: {len(pending)}, Testing/Retry: {len(testing)}")
+        print(f"→ Routing directly to Coding (skipping GitOps)")
+        print(f"{'='*60}\n")
+        return "coding"
+
+    # COMPLETE MODE: Project already done
+    if gitops_mode == "complete":
+        done = [f for f in feature_list if f.get("status") == "done"]
+        print(f"\n{'='*60}")
+        print(f"✅ Project already complete ({len(done)} features done)")
+        print(f"→ Nothing to do, ending workflow")
+        print(f"{'='*60}\n")
+        return "END"
 
     if feature_list and len(feature_list) > 0:
         print(f"✅ Initialization complete. {len(feature_list)} features to implement.")
@@ -42,6 +75,7 @@ def route_after_gitops(state: AppBuilderState) -> Literal["coding", "END"]:
 
     Decision logic:
     - If gitops_mode was "init" → go to coding (start implementing features)
+    - If gitops_mode was "recovery" → check for pending features, then coding or END
     - If gitops_mode was "feature" and pending features exist → go to coding (next feature)
     - Otherwise → END (all done)
 
@@ -61,13 +95,19 @@ def route_after_gitops(state: AppBuilderState) -> Literal["coding", "END"]:
         print(f"{'='*60}\n")
         return "coding"
 
-    # After feature commit, check if more work to do
+    # After recovery or feature commit, check if more work to do
     pending_features = [f for f in feature_list if f.get("status") == "pending"]
+    testing_features = [f for f in feature_list if f.get("status") == "testing"]
+    in_progress_features = [f for f in feature_list if f.get("status") == "in_progress"]
     
-    if pending_features:
+    # If there are incomplete features, continue to coding
+    if testing_features or pending_features or in_progress_features:
+        mode_desc = "RECOVERY" if gitops_mode == "recovery" else "FEATURE"
         print(f"\n{'='*60}")
-        print(f"✅ ROUTING: gitops (FEATURE) → coding")
+        print(f"✅ ROUTING: gitops ({mode_desc}) → coding")
         print(f"   Remaining pending: {len(pending_features)}")
+        print(f"   Needing retry: {len(testing_features)}")
+        print(f"   In progress: {len(in_progress_features)}")
         print(f"{'='*60}\n")
         return "coding"
 

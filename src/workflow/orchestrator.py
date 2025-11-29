@@ -18,6 +18,12 @@ from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import SystemMessage, HumanMessage
 from src.state.schemas import AppBuilderState
 from src.tools.memory_tools import cleanup_tool_messages, create_feature_context_message
+from src.tools.recovery_tools import (
+    mark_pending,
+    clear_all_pending,
+    check_recovery_needed,
+    get_recovery_features
+)
 from src.agents.initializer import create_initializer_agent
 from src.agents.gitops import create_gitops_agent
 from src.agents.coding import create_coding_agent
@@ -80,6 +86,53 @@ def sync_feature_list_from_disk(state: AppBuilderState, repo_path: str) -> AppBu
     return state
 
 
+def startup_recovery_check(state: AppBuilderState) -> AppBuilderState:
+    """
+    Check for pending operations that need recovery on startup.
+    
+    This runs at the beginning of the workflow to detect:
+    - Features marked "done" locally but not committed to git
+    - Explicit pending operations from previous crashed runs
+    
+    If recovery is needed, sets gitops_mode="recovery" to trigger
+    recovery processing before normal workflow continues.
+    
+    Args:
+        state: Current state
+        
+    Returns:
+        State with recovery_features set if recovery needed
+    """
+    repo_path = state.get("repo_path", "")
+    feature_list = state.get("feature_list", [])
+    
+    if not repo_path or not os.path.exists(repo_path):
+        return state
+    
+    # Check if recovery is needed
+    recovery_needed = check_recovery_needed(repo_path, feature_list)
+    
+    needs_commit = recovery_needed.get("needs_commit", [])
+    needs_push = recovery_needed.get("needs_push", [])
+    
+    if needs_commit or needs_push:
+        # Get full feature objects for recovery
+        recovery_features = get_recovery_features(repo_path, feature_list)
+        
+        print(f"\n{'='*60}")
+        print(f"🔧 STARTUP RECOVERY: Found {len(recovery_features)} features needing recovery")
+        for f in recovery_features:
+            print(f"   - {f['id']}: {f['title']}")
+        print(f"{'='*60}\n")
+        
+        # Set recovery mode
+        state["gitops_mode"] = "recovery"
+        state["recovery_features"] = recovery_features
+        state["recovery_needed"] = recovery_needed
+    
+    return state
+
+
 async def create_workflow() -> StateGraph:
     """
     Create the multi-agent workflow using LangGraph 1.0's StateGraph
@@ -120,14 +173,64 @@ async def create_workflow() -> StateGraph:
         # Debug logging
         messages = state.get('messages', [])
         first_message = messages[0].content if messages else 'N/A'
+        repo_path = state.get("repo_path", "")
 
         print(f"\n{'='*60}")
         print(f"🔍 INITIALIZER AGENT DEBUG INFO:")
         print(f"   First message: {first_message[:150]}...")
-        print(f"   Repo path: {state.get('repo_path', 'N/A')}")
+        print(f"   Repo path: {repo_path}")
         print(f"   Total messages: {len(messages)}")
         print(f"{'='*60}\n")
 
+        # EARLY RECOVERY CHECK: Before running initializer, check if this is a resume
+        # If feature_list.json exists and has done features without commits, skip initializer
+        feature_list_path = os.path.join(repo_path, "feature_list.json")
+        if os.path.exists(feature_list_path):
+            try:
+                with open(feature_list_path, "r", encoding="utf-8") as f:
+                    existing_features = json.load(f)
+                
+                if existing_features:
+                    print(f"📂 Found existing project with {len(existing_features)} features")
+                    
+                    # Create a temporary state to check for recovery
+                    temp_state = dict(state)
+                    temp_state["feature_list"] = existing_features
+                    temp_state = startup_recovery_check(temp_state)
+                    
+                    # If recovery is needed, skip initializer entirely
+                    if temp_state.get("gitops_mode") == "recovery":
+                        print(f"🔄 Recovery mode - skipping initializer agent")
+                        return temp_state
+                    
+                    # Project exists but no recovery needed - check status
+                    done = [f for f in existing_features if f.get("status") == "done"]
+                    pending = [f for f in existing_features if f.get("status") == "pending"]
+                    testing = [f for f in existing_features if f.get("status") == "testing"]
+                    in_progress = [f for f in existing_features if f.get("status") == "in_progress"]
+                    failed = [f for f in existing_features if f.get("status") == "failed"]
+                    
+                    # Project complete only if ALL features are done (none pending/testing/in_progress)
+                    # Failed features are considered "complete" (gave up after retries)
+                    if (done or failed) and not pending and not testing and not in_progress:
+                        total_done = len(done) + len(failed)
+                        print(f"✅ Project already complete ({len(done)} done, {len(failed)} failed)")
+                        temp_state["gitops_mode"] = "complete"
+                        return temp_state
+                    
+                    # Project in progress - skip to coding directly
+                    print(f"📊 Project in progress:")
+                    print(f"   Done: {len(done)}, Pending: {len(pending)}, Testing: {len(testing)}")
+                    print(f"   In Progress: {len(in_progress)}, Failed: {len(failed)}")
+                    print(f"→ Will skip initializer and gitops, go straight to coding")
+                    temp_state["gitops_mode"] = "resume"
+                    return temp_state
+                    
+            except Exception as e:
+                print(f"⚠️  Error checking existing project: {e}")
+                # Continue with normal initialization
+
+        # No existing project - run initializer agent
         result = await initializer_graph.ainvoke(state)
 
         # Debug: Print agent output with error handling
@@ -174,7 +277,7 @@ async def create_workflow() -> StateGraph:
 
         # CRITICAL: Read feature_list.json and update state
         # The agent saves the file but can't modify state directly
-        repo_path = state.get("repo_path", "")
+        # NOTE: repo_path already defined at the top of the function
         feature_list_path = os.path.join(repo_path, "feature_list.json")
 
         print(f"🔍 Checking for feature_list.json at: {feature_list_path}")
@@ -186,6 +289,7 @@ async def create_workflow() -> StateGraph:
                     features = json.load(f)
                 result["feature_list"] = features
                 print(f"✅ Loaded {len(features)} features into state")
+                # NOTE: Recovery check already done at the beginning of this function
             except Exception as e:
                 print(f"⚠️  Failed to load feature_list.json: {e}")
                 import traceback
@@ -204,13 +308,45 @@ async def create_workflow() -> StateGraph:
         project_name = state.get("project_name", "")
         repo_path = state.get("repo_path", "")
         current_feature = state.get("current_feature")
+        recovery_features = state.get("recovery_features", [])
         
         print(f"\n{'='*60}")
         print(f"🔧 GITOPS AGENT STARTING (MODE: {gitops_mode})")
         print(f"{'='*60}\n")
 
-        # Add instruction message based on mode
-        if gitops_mode == "init":
+        # Handle RECOVERY mode - process features that didn't get committed/pushed
+        if gitops_mode == "recovery" and recovery_features:
+            feature_ids = [f.get("id", "unknown") for f in recovery_features]
+            feature_list_str = "\n".join([f"   - {f.get('id')}: {f.get('title')}" for f in recovery_features])
+            
+            print(f"🔄 RECOVERY MODE: Processing {len(recovery_features)} pending features")
+            
+            instruction = SystemMessage(content=f"""
+[GITOPS AGENT INSTRUCTION - RECOVERY MODE]
+
+You are the GITOPS AGENT. Execute RECOVERY mode workflow.
+
+PREVIOUS RUN WAS INTERRUPTED. These features need commit/push:
+{feature_list_str}
+
+REPO PATH: {repo_path}
+
+Execute these steps IN ORDER:
+1. get_git_status - Review what needs to be committed
+2. IF there are uncommitted changes:
+   - create_git_commit - Create commits for features: {', '.join(feature_ids)}
+   ELSE IF no changes (already committed):
+   - Skip commit step, proceed to push
+3. push_to_github - Push all commits to GitHub
+
+NOTE: Some features may already be committed but not pushed. Check git status first.
+
+START NOW by calling get_git_status tool.
+""")
+            # NOTE: Don't mark_pending here - they're already pending (that's why we're in recovery)
+
+        # Handle INIT mode
+        elif gitops_mode == "init":
             instruction = SystemMessage(content=f"""
 [GITOPS AGENT INSTRUCTION - INIT MODE]
 
@@ -228,9 +364,26 @@ Execute these steps IN ORDER:
 
 START NOW by calling create_git_repo tool.
 """)
+        # Handle FEATURE mode (normal per-feature commit)
         else:
-            feature_id = current_feature.get("id", "unknown") if current_feature else "unknown"
-            feature_title = current_feature.get("title", "Feature") if current_feature else "Feature"
+            # Verify we have a valid current_feature
+            if not current_feature:
+                print(f"⚠️  GITOPS WARNING: No current_feature in FEATURE mode!")
+                print(f"   This indicates a bug in workflow - skipping gitops")
+                # Return state unchanged to avoid corrupting pending_ops
+                return state
+            
+            feature_id = current_feature.get("id", "unknown")
+            feature_title = current_feature.get("title", "Feature")
+            
+            # Additional validation
+            if feature_id == "unknown":
+                print(f"⚠️  GITOPS WARNING: current_feature has no valid ID!")
+                return state
+            
+            # Mark this feature's operations as pending BEFORE executing
+            mark_pending(repo_path, "commit", feature_id)
+            mark_pending(repo_path, "push", feature_id)
             
             # Get compact context from previous agents
             feature_context = create_feature_context_message(state)
@@ -260,17 +413,47 @@ START NOW by calling get_git_status tool.
         # Execute gitops agent with modified state
         result = await gitops_graph.ainvoke(modified_state)
 
+        # CLEAR PENDING OPS after successful execution
+        if gitops_mode == "recovery" and recovery_features:
+            # Clear all recovery features' pending ops
+            for f in recovery_features:
+                fid = f.get("id", "unknown")
+                clear_all_pending(repo_path, fid)
+            
+            # Clear recovery state
+            result["recovery_features"] = []
+            result["recovery_needed"] = {}
+            result["gitops_mode"] = "feature"  # Reset to normal mode
+            
+            print(f"\n{'='*50}")
+            print(f"✅ RECOVERY COMPLETE: {len(recovery_features)} features committed/pushed")
+            print(f"{'='*50}\n")
+            
+        elif gitops_mode == "feature":
+            feature_id = current_feature.get("id", "unknown") if current_feature else "unknown"
+            
+            # Clear pending ops for this feature (successful completion)
+            clear_all_pending(repo_path, feature_id)
+
         # AUTOMATIC MEMORY CLEANUP (don't rely on LLM to call the tool)
-        # This runs after FEATURE mode to prevent token overflow
-        if gitops_mode == "feature":
+        # This runs after FEATURE or RECOVERY mode to prevent token overflow
+        if gitops_mode in ["feature", "recovery"]:
             original_prompt = state.get("original_prompt", "")
             current_messages = result.get("messages", [])
             message_count = len(current_messages)
             
+            # Get feature description for logging
+            if gitops_mode == "recovery":
+                feature_desc = f"recovery ({len(recovery_features)} features)"
+            elif current_feature:
+                feature_desc = current_feature.get("id", "unknown")
+            else:
+                feature_desc = "unknown"
+            
             print(f"\n{'='*50}")
             print(f"MEMORY CLEANUP (automatic)")
             print(f"{'='*50}")
-            print(f"Feature completed: {feature_id}")
+            print(f"Completed: {feature_desc}")
             print(f"Messages before cleanup: {message_count}")
             print(f"Messages after cleanup: 1 (original prompt)")
             print(f"{'='*50}\n")
@@ -589,6 +772,7 @@ START NOW by calling run_all_quality_checks tool.
         route_after_init,
         {
             "gitops": "gitops",
+            "coding": "coding",  # For resume mode (project in progress)
             "END": END
         }
     )
