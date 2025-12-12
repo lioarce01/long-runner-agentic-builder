@@ -15,13 +15,13 @@ from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
 from dotenv import load_dotenv
 from psycopg_pool import AsyncConnectionPool
 
 # Load environment
-env_file = PROJECT_ROOT / ".env"
+env_file = PROJECT_ROOT / "backend" / ".env"
 load_dotenv(env_file)
 
 

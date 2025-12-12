@@ -1,0 +1,234 @@
+/* Minimalist Dark Theme - Inspired by Vercel/Supabase */
+
+/* Global Styles */
+Screen {
+    background: #000000;
+    color: #ededed;
+}
+
+/* Header & Footer */
+Header {
+    background: #000000;
+    color: #ededed;
+    height: 1;
+    dock: top;
+    border-bottom: solid #222222;
+}
+
+Footer {
+    background: #000000;
+    color: #666666;
+    height: 1;
+    dock: bottom;
+    border-top: solid #222222;
+}
+
+Footer .footer-key {
+    color: #00D9A3;
+}
+
+/* Layout Containers */
+Container {
+    height: 100%;
+    background: #000000;
+}
+
+Vertical {
+    height: auto;
+}
+
+Horizontal {
+    height: auto;
+}
+
+/* Feature Table - Minimalist Design */
+DataTable {
+    height: 100%;
+    background: #000000;
+    color: #ededed;
+    border: none;
+}
+
+DataTable > .datatable--header {
+    background: #0a0a0a;
+    color: #666666;
+    text-style: none;
+    border-bottom: solid #1a1a1a;
+}
+
+DataTable > .datatable--cursor {
+    background: #0a0a0a;
+}
+
+DataTable > .datatable--odd-row {
+    background: #000000;
+}
+
+DataTable > .datatable--even-row {
+    background: #000000;
+}
+
+DataTable > .datatable--hover {
+    background: #0a0a0a;
+}
+
+/* Log Viewer - Clean and Minimal */
+RichLog {
+    height: 100%;
+    background: #000000;
+    color: #ededed;
+    border: none;
+    padding: 1;
+}
+
+RichLog:focus {
+    border: none;
+}
+
+/* Static Widgets */
+Static {
+    background: transparent;
+    color: #ededed;
+}
+
+/* Buttons - Vercel Style */
+Button {
+    background: #000000;
+    color: #ededed;
+    border: solid #333333;
+    text-style: none;
+    height: 3;
+}
+
+Button:hover {
+    background: #0a0a0a;
+    border: solid #00D9A3;
+    color: #00D9A3;
+}
+
+Button:focus {
+    background: #0a0a0a;
+    border: solid #00D9A3;
+    color: #00D9A3;
+}
+
+/* Input Fields - Clean and Minimal */
+Input {
+    background: #0a0a0a;
+    color: #ededed;
+    border: solid #222222;
+    height: 3;
+}
+
+Input:focus {
+    border: solid #00D9A3;
+}
+
+Input.-valid {
+    border: solid #00D9A3;
+}
+
+Input.-invalid {
+    border: solid #FF6B6B;
+}
+
+/* Labels - Muted */
+Label {
+    color: #999999;
+    text-style: none;
+}
+
+/* Main Screen Layout */
+#main_container {
+    height: 100%;
+    width: 100%;
+    background: #000000;
+}
+
+#status_header {
+    height: 3;
+    padding: 1 2;
+    background: #000000;
+    border-bottom: solid #1a1a1a;
+}
+
+#content_horizontal {
+    height: 1fr;
+    width: 100%;
+}
+
+#left_panel {
+    width: 75%;
+    height: 100%;
+    padding-right: 1;
+}
+
+#right_panel {
+    width: 25%;
+    height: 100%;
+}
+
+#feature_table_container {
+    height: 60%;
+    border: solid #1a1a1a;
+    background: #000000;
+}
+
+#log_viewer_container {
+    height: 40%;
+    border: solid #1a1a1a;
+    background: #000000;
+    margin-top: 1;
+}
+
+#token_chart_container {
+    height: 100%;
+    border: solid #1a1a1a;
+    background: #000000;
+}
+
+FeatureTable {
+    height: 1fr;
+}
+
+LogViewer {
+    height: 1fr;
+}
+
+TokenChart {
+    height: 1fr;
+}
+
+#status_header_widget {
+    background: #000000;
+    color: #999999;
+}
+
+/* Setup Screen - Sophisticated */
+#setup_container {
+    background: #000000;
+    border: solid #222222;
+    padding: 4;
+}
+
+#title {
+    color: #ededed;
+    text-style: bold;
+}
+
+#subtitle {
+    color: #666666;
+}
+
+.label {
+    color: #999999;
+    text-style: none;
+}
+
+#error_message {
+    color: #FF6B6B;
+}
+
+#start_button {
+    margin-top: 2;
+}

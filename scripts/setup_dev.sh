@@ -22,9 +22,11 @@ echo "✅ Python $python_version"
 # Create virtual environment
 echo ""
 echo "📦 Creating virtual environment..."
-if [ ! -d ".venv" ]; then
+if [ ! -d "backend/.venv" ]; then
+    cd backend
     python -m venv .venv
     echo "✅ Virtual environment created"
+    cd ..
 else
     echo "✅ Virtual environment already exists"
 fi
@@ -32,6 +34,7 @@ fi
 # Activate virtual environment
 echo ""
 echo "📦 Activating virtual environment..."
+cd backend
 source .venv/bin/activate || .venv/Scripts/activate
 
 # Install dependencies
@@ -57,11 +60,11 @@ fi
 # Setup environment file
 echo ""
 echo "📝 Checking environment configuration..."
-if [ ! -f ".env.development" ]; then
-    echo "⚠️  .env.development not found"
+if [ ! -f ".env" ]; then
+    echo "⚠️  .env not found"
     echo "   Please create it based on .env.production.example"
 else
-    echo "✅ .env.development exists"
+    echo "✅ .env exists"
 fi
 
 # Install Playwright
@@ -81,14 +84,14 @@ echo "=" * 80
 echo "✅ Development environment ready!"
 echo ""
 echo "Next steps:"
-echo "  1. Configure API keys in .env.development"
+echo "  1. Configure API keys in backend/.env"
 echo "  2. Run the application:"
-echo "     python src/main.py my-project \"Build a chatbot\""
+echo "     cd backend"
+echo "     python -m src.main my-project \"Build a chatbot\""
 echo ""
 echo "Useful commands:"
-echo "  - Start PostgreSQL: docker-compose up -d postgres"
-echo "  - Stop PostgreSQL: docker-compose down"
+echo "  - Start PostgreSQL: cd backend && docker-compose up -d postgres"
+echo "  - Stop PostgreSQL: cd backend && docker-compose down"
 echo "  - View checkpoints: python scripts/inspect_checkpoints.py list"
-echo "  - Run tests: pytest tests/"
 echo ""
 echo "=" * 80

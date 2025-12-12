@@ -413,24 +413,27 @@ END: Application complete with full Git history!
 
 **Quick Start:**
 ```bash
-# 1. Install dependencies
+# 1. Navigate to backend directory
+cd backend
+
+# 2. Install dependencies
 pip install -e .
 
-# 2. Configure environment
-cp .env.production.example .env.development
+# 3. Configure environment
+cp .env.production.example .env
 # Add your API keys:
 #   GOOGLE_API_KEY=...
 #   ANTHROPIC_API_KEY=...
 #   GITHUB_TOKEN=...
 #   DATABASE_URL=postgresql://...
 
-# 3. Build something
-python src/main.py my-project "Build a REST API for task management"
+# 4. Build something
+python -m src.main my-project "Build a REST API for task management"
 
-# 4. Monitor progress
-tail -f output/my-project/progress_log.json
+# 5. Monitor progress
+tail -f ../output/my-project/progress_log.json
 
-# 5. Check GitHub - your repo is already there!
+# 6. Check GitHub - your repo is already there!
 ```
 
 **Full documentation:** See [SETUP.md](SETUP.md) for detailed installation instructions.

@@ -10,9 +10,12 @@ import asyncio
 import asyncpg
 import os
 import sys
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv(".env.development")
+# Load .env from backend directory
+env_path = Path(__file__).parent.parent / "backend" / ".env"
+load_dotenv(env_path)
 
 
 async def list_threads():
