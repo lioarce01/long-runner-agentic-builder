@@ -102,13 +102,13 @@ class FeatureTable(DataTable):
             Rich Text object with color styling
         """
         status_styles = {
-            "done": ("✓ done", "#00D9A3"),
-            "testing": ("⚡ testing", "#FFD700"),
-            "in_progress": ("→ in_progress", "#3B82F6"),
-            "coding": ("⚙ coding", "#3B82F6"),
-            "pending": ("○ pending", "#666666"),
-            "failed": ("✗ failed", "#FF6B6B"),
-            "blocked": ("⚠ blocked", "#FF6B6B"),
+            "done": ("[OK] done", "#00D9A3"),
+            "testing": ("[FAST] testing", "#FFD700"),
+            "in_progress": ("-> in_progress", "#3B82F6"),
+            "coding": ("[BUILD] coding", "#3B82F6"),
+            "pending": ("o pending", "#666666"),
+            "failed": ("[EMOJI] failed", "#FF6B6B"),
+            "blocked": ("[EMOJI] blocked", "#FF6B6B"),
         }
 
         display_text, style = status_styles.get(

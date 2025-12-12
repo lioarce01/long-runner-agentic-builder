@@ -2,7 +2,7 @@
 Workflow orchestrator using LangGraph 1.0 StateGraph
 
 Creates the multi-agent workflow that coordinates:
-- Initializer → GitOps → Coding → Testing → QA/Doc → GitOps → (loop or END)
+- Initializer -> GitOps -> Coding -> Testing -> QA/Doc -> GitOps -> (loop or END)
 
 GitOps Agent handles all Git/GitHub operations:
 - After Initializer: Create repo, initial commit, push
@@ -14,6 +14,7 @@ Compatible with:
 
 import os
 import json
+from datetime import datetime
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import SystemMessage, HumanMessage
 from src.state.schemas import AppBuilderState
@@ -36,6 +37,49 @@ from src.workflow.routers import (
     route_after_testing,
     route_after_qa
 )
+
+
+def log_progress(repo_path: str, agent: str, feature_id: str, action: str, notes: str = "") -> None:
+    """
+    Automatically log progress to progress_log.json
+
+    Args:
+        repo_path: Path to project repository
+        agent: Agent name (coding, testing, qa_doc, gitops)
+        feature_id: Feature ID being worked on
+        action: Action performed (e.g., "implemented", "tested", "documented")
+        notes: Optional additional notes
+    """
+    log_path = os.path.join(repo_path, "progress_log.json")
+
+    # Read existing log
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                logs = json.load(f)
+        except Exception:
+            logs = []
+    else:
+        logs = []
+
+    # Create new entry
+    entry = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "agent": agent,
+        "feature_id": feature_id,
+        "action": action,
+        "notes": notes
+    }
+
+    # Append and save
+    logs.append(entry)
+
+    try:
+        with open(log_path, "w", encoding="utf-8") as f:
+            json.dump(logs, f, indent=2)
+        print(f"[PROGRESS] [{agent}] {feature_id} - {action}")
+    except Exception as e:
+        print(f"[WARNING] Failed to log progress: {e}")
 
 
 def sync_feature_list_from_disk(state: AppBuilderState, repo_path: str) -> AppBuilderState:
@@ -67,7 +111,7 @@ def sync_feature_list_from_disk(state: AppBuilderState, repo_path: str) -> AppBu
             state["feature_list"] = features
 
             print(f"\n{'='*60}")
-            print(f"🔄 STATE SYNC: Loaded {len(features)} features from disk")
+            print(f"[SYNC] Loaded {len(features)} features from disk")
 
             # Count by status
             status_counts = {}
@@ -79,9 +123,9 @@ def sync_feature_list_from_disk(state: AppBuilderState, repo_path: str) -> AppBu
             print(f"{'='*60}\n")
 
         except Exception as e:
-            print(f"⚠️  Failed to sync feature_list from disk: {e}")
+            print(f"[WARNING] Failed to sync feature_list from disk: {e}")
     else:
-        print(f"⚠️  feature_list.json not found at {feature_list_path}")
+        print(f"[WARNING] feature_list.json not found at {feature_list_path}")
 
     return state
 
@@ -120,7 +164,7 @@ def startup_recovery_check(state: AppBuilderState) -> AppBuilderState:
         recovery_features = get_recovery_features(repo_path, feature_list)
         
         print(f"\n{'='*60}")
-        print(f"🔧 STARTUP RECOVERY: Found {len(recovery_features)} features needing recovery")
+        print(f"[RECOVERY] Found {len(recovery_features)} features needing recovery")
         for f in recovery_features:
             print(f"   - {f['id']}: {f['title']}")
         print(f"{'='*60}\n")
@@ -141,8 +185,8 @@ async def create_workflow() -> StateGraph:
 
     Workflow:
     ```
-    START → Initializer → GitOps → Coding → Testing → QA/Doc → GitOps → (back to Coding or END)
-                             │                                       │
+    START -> Initializer -> GitOps -> Coding -> Testing -> QA/Doc -> GitOps -> (back to Coding or END)
+                                                                    
                         INIT mode                              FEATURE mode
     ```
 
@@ -159,13 +203,13 @@ async def create_workflow() -> StateGraph:
 
     # Create all agents (these return CompiledStateGraph)
     # NOTE: These are async because they load tools from MCP servers
-    print("🤖 Creating agents...")
+    print("[WORKFLOW] Creating agents...")
     initializer_graph = await create_initializer_agent()
     gitops_graph = await create_gitops_agent()
     coding_graph = await create_coding_agent()
     test_graph = await create_test_agent()
     qa_doc_graph = await create_qa_doc_agent()
-    print("✅ All agents created")
+    print("[WORKFLOW] All agents created")
 
     # Create wrapper functions to properly integrate agent graphs
     async def initializer_node(state: AppBuilderState) -> AppBuilderState:
@@ -176,7 +220,7 @@ async def create_workflow() -> StateGraph:
         repo_path = state.get("repo_path", "")
 
         print(f"\n{'='*60}")
-        print(f"🔍 INITIALIZER AGENT DEBUG INFO:")
+        print(f"[DEBUG] INITIALIZER AGENT DEBUG INFO:")
         print(f"   First message: {first_message[:150]}...")
         print(f"   Repo path: {repo_path}")
         print(f"   Total messages: {len(messages)}")
@@ -191,7 +235,7 @@ async def create_workflow() -> StateGraph:
                     existing_features = json.load(f)
                 
                 if existing_features:
-                    print(f"📂 Found existing project with {len(existing_features)} features")
+                    print(f"[EMOJI] Found existing project with {len(existing_features)} features")
                     
                     # Create a temporary state to check for recovery
                     temp_state = dict(state)
@@ -200,7 +244,7 @@ async def create_workflow() -> StateGraph:
                     
                     # If recovery is needed, skip initializer entirely
                     if temp_state.get("gitops_mode") == "recovery":
-                        print(f"🔄 Recovery mode - skipping initializer agent")
+                        print(f"[RESUME] Recovery mode - skipping initializer agent")
                         return temp_state
                     
                     # Project exists but no recovery needed - check status
@@ -214,20 +258,20 @@ async def create_workflow() -> StateGraph:
                     # Failed features are considered "complete" (gave up after retries)
                     if (done or failed) and not pending and not testing and not in_progress:
                         total_done = len(done) + len(failed)
-                        print(f"✅ Project already complete ({len(done)} done, {len(failed)} failed)")
+                        print(f"[OK] Project already complete ({len(done)} done, {len(failed)} failed)")
                         temp_state["gitops_mode"] = "complete"
                         return temp_state
                     
                     # Project in progress - skip to coding directly
-                    print(f"📊 Project in progress:")
+                    print(f"[STATS] Project in progress:")
                     print(f"   Done: {len(done)}, Pending: {len(pending)}, Testing: {len(testing)}")
                     print(f"   In Progress: {len(in_progress)}, Failed: {len(failed)}")
-                    print(f"→ Will skip initializer and gitops, go straight to coding")
+                    print(f"-> Will skip initializer and gitops, go straight to coding")
                     temp_state["gitops_mode"] = "resume"
                     return temp_state
                     
             except Exception as e:
-                print(f"⚠️  Error checking existing project: {e}")
+                print(f"[WARN]  Error checking existing project: {e}")
                 # Continue with normal initialization
 
         # No existing project - run initializer agent
@@ -236,7 +280,7 @@ async def create_workflow() -> StateGraph:
         # Debug: Print agent output with error handling
         try:
             print(f"\n{'='*60}")
-            print(f"🔍 INITIALIZER AGENT OUTPUT:")
+            print(f"[DEBUG] INITIALIZER AGENT OUTPUT:")
             messages = result.get('messages', [])
             print(f"   Messages returned: {len(messages)}")
 
@@ -249,7 +293,7 @@ async def create_workflow() -> StateGraph:
                     content = str(last_msg.content) if hasattr(last_msg, 'content') else 'N/A'
                     print(f"   Last message content: {content[:500]}...")
                 except Exception as e:
-                    print(f"   ⚠️ Error getting content: {e}")
+                    print(f"   [WARN] Error getting content: {e}")
 
                 # Check for tool calls
                 if hasattr(last_msg, 'tool_calls'):
@@ -259,7 +303,7 @@ async def create_workflow() -> StateGraph:
                 print(f"   Message types: {[type(m).__name__ for m in messages]}")
 
                 # Print ALL tool calls made during the session
-                print(f"\n   📋 ALL TOOL CALLS IN SESSION:")
+                print(f"\n   [QA] ALL TOOL CALLS IN SESSION:")
                 for i, msg in enumerate(messages):
                     if hasattr(msg, 'tool_calls') and msg.tool_calls:
                         for tc in msg.tool_calls:
@@ -267,11 +311,11 @@ async def create_workflow() -> StateGraph:
                     elif type(msg).__name__ == 'ToolMessage':
                         print(f"      {i}. ToolMessage: {msg.name if hasattr(msg, 'name') else 'unknown'}")
             else:
-                print(f"   ⚠️ No messages in result!")
+                print(f"   [WARN] No messages in result!")
 
             print(f"{'='*60}\n")
         except Exception as e:
-            print(f"⚠️ Error printing agent output: {e}")
+            print(f"[WARN] Error printing agent output: {e}")
             import traceback
             traceback.print_exc()
 
@@ -280,7 +324,7 @@ async def create_workflow() -> StateGraph:
         # NOTE: repo_path already defined at the top of the function
         feature_list_path = os.path.join(repo_path, "feature_list.json")
 
-        print(f"🔍 Checking for feature_list.json at: {feature_list_path}")
+        print(f"[DEBUG] Checking for feature_list.json at: {feature_list_path}")
         print(f"   File exists: {os.path.exists(feature_list_path)}")
 
         if os.path.exists(feature_list_path):
@@ -288,14 +332,14 @@ async def create_workflow() -> StateGraph:
                 with open(feature_list_path, "r", encoding="utf-8") as f:
                     features = json.load(f)
                 result["feature_list"] = features
-                print(f"✅ Loaded {len(features)} features into state")
+                print(f"[OK] Loaded {len(features)} features into state")
                 # NOTE: Recovery check already done at the beginning of this function
             except Exception as e:
-                print(f"⚠️  Failed to load feature_list.json: {e}")
+                print(f"[WARN]  Failed to load feature_list.json: {e}")
                 import traceback
                 traceback.print_exc()
         else:
-            print(f"⚠️  feature_list.json not found, state will have empty feature_list")
+            print(f"[WARN]  feature_list.json not found, state will have empty feature_list")
 
         # Set gitops_mode to "init" for GitOps agent
         result["gitops_mode"] = "init"
@@ -311,29 +355,29 @@ async def create_workflow() -> StateGraph:
         recovery_features = state.get("recovery_features", [])
         
         print(f"\n{'='*60}")
-        print(f"🔧 GITOPS AGENT STARTING (MODE: {gitops_mode})")
+        print(f"[GITOPS] GITOPS AGENT STARTING (MODE: {gitops_mode})")
         print(f"{'='*60}\n")
 
         # Handle RECOVERY mode - process features that didn't get committed/pushed
         if gitops_mode == "recovery" and recovery_features:
             feature_ids = [f.get("id", "unknown") for f in recovery_features]
 
-            print(f"🔄 RECOVERY MODE: Processing {len(recovery_features)} pending features")
+            print(f"[RESUME] RECOVERY MODE: Processing {len(recovery_features)} pending features")
             
             instruction = SystemMessage(content=f"""GITOPS RECOVERY: Commit/push {len(recovery_features)} features: {', '.join(feature_ids)}
 REPO: {repo_path}
-STEPS: get_git_status → commit if needed → push_to_github""")
+STEPS: get_git_status -> commit if needed -> push_to_github""")
             # NOTE: Don't mark_pending here - they're already pending (that's why we're in recovery)
 
         # Handle INIT mode
         elif gitops_mode == "init":
             instruction = SystemMessage(content=f"""GITOPS INIT: Project "{project_name}" at {repo_path}
-STEPS: create_git_repo → commit "chore: Initialize" → create_github_repo → add_remote → push""")
+STEPS: create_git_repo -> commit "chore: Initialize" -> create_github_repo -> add_remote -> push""")
         # Handle FEATURE mode (normal per-feature commit)
         else:
             # Verify we have a valid current_feature
             if not current_feature:
-                print(f"⚠️  GITOPS WARNING: No current_feature in FEATURE mode!")
+                print(f"[WARN]  GITOPS WARNING: No current_feature in FEATURE mode!")
                 print(f"   This indicates a bug in workflow - skipping gitops")
                 # Return state unchanged to avoid corrupting pending_ops
                 return state
@@ -343,7 +387,7 @@ STEPS: create_git_repo → commit "chore: Initialize" → create_github_repo →
             
             # Additional validation
             if feature_id == "unknown":
-                print(f"⚠️  GITOPS WARNING: current_feature has no valid ID!")
+                print(f"[WARN]  GITOPS WARNING: current_feature has no valid ID!")
                 return state
             
             # Mark this feature's operations as pending BEFORE executing
@@ -355,7 +399,7 @@ STEPS: create_git_repo → commit "chore: Initialize" → create_github_repo →
             
             instruction = SystemMessage(content=f"""GITOPS FEATURE: {feature_context}
 REPO: {repo_path}
-STEPS: get_git_status → commit {feature_id} → push_to_github""")
+STEPS: get_git_status -> commit {feature_id} -> push_to_github""")
         
         # Add instruction to messages
         modified_state = dict(state)
@@ -363,6 +407,16 @@ STEPS: get_git_status → commit {feature_id} → push_to_github""")
 
         # Execute gitops agent with modified state
         result = await gitops_graph.ainvoke(modified_state)
+
+        # Log progress based on mode
+        if gitops_mode == "init":
+            log_progress(repo_path, "gitops", "project", "initialized", f"Created repo and initial commit for {project_name}")
+        elif gitops_mode == "recovery" and recovery_features:
+            feature_ids = [f.get("id", "unknown") for f in recovery_features]
+            log_progress(repo_path, "gitops", "recovery", "recovered", f"Committed/pushed {len(recovery_features)} features: {', '.join(feature_ids)}")
+        elif gitops_mode == "feature" and current_feature:
+            feature_id = current_feature.get("id", "unknown")
+            log_progress(repo_path, "gitops", feature_id, "committed", f"Committed and pushed {current_feature.get('title', 'feature')}")
 
         # CLEAR PENDING OPS after successful execution
         if gitops_mode == "recovery" and recovery_features:
@@ -377,7 +431,7 @@ STEPS: get_git_status → commit {feature_id} → push_to_github""")
             result["gitops_mode"] = "feature"  # Reset to normal mode
             
             print(f"\n{'='*50}")
-            print(f"✅ RECOVERY COMPLETE: {len(recovery_features)} features committed/pushed")
+            print(f"[OK] RECOVERY COMPLETE: {len(recovery_features)} features committed/pushed")
             print(f"{'='*50}\n")
             
         elif gitops_mode == "feature":
@@ -432,7 +486,7 @@ STEPS: get_git_status → commit {feature_id} → push_to_github""")
         
         if os.path.exists(requirements_file) and not os.path.exists(venv_path):
             print(f"\n{'='*50}")
-            print(f"📦 AUTO-SETUP: Creating project environment")
+            print(f"[SETUP] AUTO-SETUP: Creating project environment")
             print(f"{'='*50}")
             
             # Step 1: Create venv
@@ -443,7 +497,7 @@ STEPS: get_git_status → commit {feature_id} → push_to_github""")
                 capture_output=True,
                 encoding="utf-8"
             )
-            print(f"   ✅ Venv created")
+            print(f"   [OK] Venv created")
             
             # Step 2: Install dependencies using project's pip
             if is_windows:
@@ -461,9 +515,9 @@ STEPS: get_git_status → commit {feature_id} → push_to_github""")
             )
             
             if install_result.returncode == 0:
-                print(f"   ✅ Dependencies installed successfully")
+                print(f"   [OK] Dependencies installed successfully")
             else:
-                print(f"   ⚠️  Some dependencies may have failed:")
+                print(f"   [WARN]  Some dependencies may have failed:")
                 if install_result.stderr:
                     print(f"   {install_result.stderr[:200]}")
             
@@ -474,7 +528,7 @@ STEPS: get_git_status → commit {feature_id} → push_to_github""")
         testing = [f for f in feature_list if f.get("status") == "testing"]
 
         print(f"\n{'='*60}")
-        print(f"🔍 CODING AGENT STARTING")
+        print(f"[DEBUG] CODING AGENT STARTING")
         print(f"   Features total: {len(feature_list)}")
         print(f"   Testing (retry): {len(testing)}")
         print(f"   Pending: {len(pending)}")
@@ -491,12 +545,12 @@ STEPS: get_git_status → commit {feature_id} → push_to_github""")
             retry_attempts = retry_feature.get("attempts", 0)
             
             instruction = SystemMessage(content=f"""CODING RETRY: Fix {retry_id} - {retry_title} (attempt {retry_attempts}/3)
-TASK: select_next_feature → read test results → fix code → update_feature_status("testing")
+TASK: select_next_feature -> read test results -> fix code -> update_feature_status("testing")
 Call select_next_feature ONCE only.""")
         else:
             # NORMAL MODE: Implement next pending feature
             instruction = SystemMessage(content=f"""CODING NEW: {len(pending)} pending features
-TASK: select_next_feature ONCE → implement code → update_feature_status("testing")""")
+TASK: select_next_feature ONCE -> implement code -> update_feature_status("testing")""")
         
         # Add instruction to messages
         modified_state = dict(state)
@@ -508,6 +562,16 @@ TASK: select_next_feature ONCE → implement code → update_feature_status("tes
         # CRITICAL: Sync feature_list from disk after agent execution
         # Coding agent calls update_feature_status tool which writes to disk
         result = sync_feature_list_from_disk(result, repo_path)
+
+        # Log progress - find which feature was worked on
+        feature_list = result.get("feature_list", [])
+        testing_features = [f for f in feature_list if f.get("status") == "testing"]
+        if testing_features:
+            worked_feature = testing_features[0]
+            attempts = worked_feature.get("attempts", 0)
+            action = "retry" if attempts > 0 else "implemented"
+            log_progress(repo_path, "coding", worked_feature.get("id", "unknown"), action,
+                        f"{worked_feature.get('title', 'feature')} (attempt {attempts + 1})")
 
         # PHASE 4.1: Trim conversation history to max 4000 tokens
         from src.tools.message_trimmer import trim_conversation_history
@@ -525,28 +589,28 @@ TASK: select_next_feature ONCE → implement code → update_feature_status("tes
             # If there's only one testing feature, use it
             if len(testing_features) == 1:
                 result["current_feature"] = testing_features[0]
-                print(f"✅ Set current_feature to: {testing_features[0]['id']}")
+                print(f"[OK] Set current_feature to: {testing_features[0]['id']}")
             else:
                 # Multiple testing features - use the one with lowest priority (worked first)
                 # or the one with most attempts (being retried)
                 testing_features.sort(key=lambda f: (-f.get("attempts", 0), f.get("priority", 999)))
                 result["current_feature"] = testing_features[0]
-                print(f"✅ Set current_feature to: {testing_features[0]['id']} (from {len(testing_features)} testing features)")
+                print(f"[OK] Set current_feature to: {testing_features[0]['id']} (from {len(testing_features)} testing features)")
         else:
             # Check for in_progress features
             in_progress = [f for f in feature_list if f.get("status") == "in_progress"]
             if in_progress:
                 result["current_feature"] = in_progress[0]
-                print(f"✅ Set current_feature to in_progress: {in_progress[0]['id']}")
+                print(f"[OK] Set current_feature to in_progress: {in_progress[0]['id']}")
             else:
-                print(f"⚠️  No feature in testing or in_progress state")
+                print(f"[WARN]  No feature in testing or in_progress state")
 
         # SELECTIVE CLEANUP: Remove ToolMessages to reduce tokens
         # Keep last 1 tool message for immediate context (Phase 3.3 optimization)
         messages_before = len(result.get("messages", []))
         result["messages"] = cleanup_tool_messages(result["messages"], keep_last_n_tools=1)
         messages_after = len(result.get("messages", []))
-        print(f"📉 SELECTIVE CLEANUP (coding): {messages_before} → {messages_after} messages")
+        print(f"[CLEANUP] SELECTIVE CLEANUP (coding): {messages_before} -> {messages_after} messages")
 
         # PHASE 4.4: Track token usage for optimization insights
         from src.utils.token_counter import count_messages_tokens, log_token_usage
@@ -564,7 +628,7 @@ TASK: select_next_feature ONCE → implement code → update_feature_status("tes
         feature_title = current_feature.get("title", "Feature") if current_feature else "Feature"
 
         print(f"\n{'='*60}")
-        print(f"🧪 TESTING AGENT STARTING")
+        print(f"[TEST] TESTING AGENT STARTING")
         print(f"   Feature: {feature_id} - {feature_title}")
         print(f"{'='*60}\n")
 
@@ -574,7 +638,7 @@ TASK: select_next_feature ONCE → implement code → update_feature_status("tes
         # Add instruction message with injected context
         instruction = SystemMessage(content=f"""TESTING: {feature_context}
 REPO: {repo_path}
-STEPS: run_pytest_tests → update_feature_status (done if pass, testing if fail)""")
+STEPS: run_pytest_tests -> update_feature_status (done if pass, testing if fail)""")
         
         # Add instruction to messages
         modified_state = dict(state)
@@ -585,6 +649,21 @@ STEPS: run_pytest_tests → update_feature_status (done if pass, testing if fail
 
         # Sync feature_list from disk
         result = sync_feature_list_from_disk(result, repo_path)
+
+        # Log progress - check test result
+        feature_list = result.get("feature_list", [])
+        if current_feature:
+            # Find updated feature status
+            for f in feature_list:
+                if f.get("id") == feature_id:
+                    status = f.get("status")
+                    if status == "done":
+                        log_progress(repo_path, "testing", feature_id, "passed",
+                                   f"Tests passed for {f.get('title', 'feature')}")
+                    else:
+                        log_progress(repo_path, "testing", feature_id, "failed",
+                                   f"Tests failed for {f.get('title', 'feature')} (attempt {f.get('attempts', 0)})")
+                    break
 
         # PHASE 4.1: Trim conversation history to max 4000 tokens
         from src.tools.message_trimmer import trim_conversation_history
@@ -602,22 +681,22 @@ STEPS: run_pytest_tests → update_feature_status (done if pass, testing if fail
                     new_status = f.get("status", "unknown")
                     attempts = f.get("attempts", 0)
                     if new_status == "done":
-                        print(f"✅ Feature {feature_id} passed tests -> done")
+                        print(f"[OK] Feature {feature_id} passed tests -> done")
                     else:
-                        print(f"⚠️  Feature {feature_id} still in {new_status} (attempts: {attempts})")
+                        print(f"[WARN]  Feature {feature_id} still in {new_status} (attempts: {attempts})")
                     break
         else:
             # Fallback: find any done feature that doesn't have QA yet
             done_features = [f for f in feature_list if f.get("status") == "done"]
             if done_features:
                 result["current_feature"] = done_features[0]
-                print(f"✅ Set current_feature to done: {done_features[0]['id']}")
+                print(f"[OK] Set current_feature to done: {done_features[0]['id']}")
 
         # SELECTIVE CLEANUP: Remove ToolMessages to reduce tokens (Phase 3.3)
         messages_before = len(result.get("messages", []))
         result["messages"] = cleanup_tool_messages(result["messages"], keep_last_n_tools=1)
         messages_after = len(result.get("messages", []))
-        print(f"📉 SELECTIVE CLEANUP (testing): {messages_before} → {messages_after} messages")
+        print(f"[CLEANUP] SELECTIVE CLEANUP (testing): {messages_before} -> {messages_after} messages")
 
         # PHASE 4.4: Track token usage for optimization insights
         from src.utils.token_counter import count_messages_tokens, log_token_usage
@@ -635,7 +714,7 @@ STEPS: run_pytest_tests → update_feature_status (done if pass, testing if fail
         feature_title = current_feature.get("title", "Feature") if current_feature else "Feature"
 
         print(f"\n{'='*60}")
-        print(f"📋 QA/DOC AGENT STARTING")
+        print(f"[QA] QA/DOC AGENT STARTING")
         print(f"   Feature: {feature_id} - {feature_title}")
         print(f"{'='*60}\n")
 
@@ -645,7 +724,7 @@ STEPS: run_pytest_tests → update_feature_status (done if pass, testing if fail
         # Add instruction message with injected context
         instruction = SystemMessage(content=f"""QA/DOC: {feature_context}
 REPO: {repo_path}
-STEPS: run_all_quality_checks → update_changelog → generate_feature_documentation → update_qa_progress_log""")
+STEPS: run_all_quality_checks -> update_changelog -> generate_feature_documentation -> update_qa_progress_log""")
         
         # Add instruction to messages
         modified_state = dict(state)
@@ -658,6 +737,11 @@ STEPS: run_all_quality_checks → update_changelog → generate_feature_document
         # QA agent calls update_feature_status to mark feature as "done"
         result = sync_feature_list_from_disk(result, repo_path)
 
+        # Log progress
+        if current_feature:
+            log_progress(repo_path, "qa_doc", feature_id, "documented",
+                        f"QA and documentation completed for {current_feature.get('title', 'feature')}")
+
         # PHASE 4.1: Trim conversation history to max 4000 tokens
         from src.tools.message_trimmer import trim_conversation_history
         result["messages"] = trim_conversation_history(result["messages"], max_tokens=4000)
@@ -669,7 +753,7 @@ STEPS: run_all_quality_checks → update_changelog → generate_feature_document
         messages_before = len(result.get("messages", []))
         result["messages"] = cleanup_tool_messages(result["messages"], keep_last_n_tools=1)
         messages_after = len(result.get("messages", []))
-        print(f"📉 SELECTIVE CLEANUP (qa_doc): {messages_before} → {messages_after} messages")
+        print(f"[CLEANUP] SELECTIVE CLEANUP (qa_doc): {messages_before} -> {messages_after} messages")
 
         # PHASE 4.4: Track token usage for optimization insights
         from src.utils.token_counter import count_messages_tokens, log_token_usage

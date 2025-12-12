@@ -122,17 +122,17 @@ class SetupScreen(Screen):
 
         # Validate inputs
         if not project_name:
-            error_message.update("❌ Project name is required")
+            error_message.update("[FAIL] Project name is required")
             project_name_input.focus()
             return
 
         if not description:
-            error_message.update("❌ Project description is required")
+            error_message.update("[FAIL] Project description is required")
             description_input.focus()
             return
 
         if len(description) < 10:
-            error_message.update("❌ Description must be at least 10 characters")
+            error_message.update("[FAIL] Description must be at least 10 characters")
             description_input.focus()
             return
 

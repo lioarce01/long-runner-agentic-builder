@@ -46,10 +46,11 @@ class TokenChart(Static):
             return
 
         try:
-            with open(token_path, "r", encoding="utf-8") as f:
-                token_data = json.load(f)
+            # Use get_token_stats to process raw log entries into aggregated stats
+            from src.utils.token_counter import get_token_stats
+            token_data = get_token_stats(repo_path)
 
-            # Render chart with data
+            # Render chart with aggregated data
             self.update(self._render_chart(token_data))
 
         except json.JSONDecodeError:
@@ -166,7 +167,7 @@ class TokenChart(Static):
         # Build bar line
         line = Text()
         line.append(f"{agent.upper()[:8]:<8} ", style="#ededed")
-        line.append("█" * bar_width, style=color)
+        line.append("" * bar_width, style=color)
         line.append(f" {tokens:,} ({percentage:.1f}%)", style="#666666")
 
         return line

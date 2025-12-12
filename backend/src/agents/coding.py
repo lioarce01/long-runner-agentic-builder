@@ -151,7 +151,7 @@ def update_progress_log_entry(
         json.dump(log, f, indent=2)
 
     print(f"\n{'='*60}")
-    print(f"📋 PROGRESS LOG UPDATED")
+    print(f"[QA] PROGRESS LOG UPDATED")
     print(f"   Agent: {agent}")
     print(f"   Feature: {feature_id}")
     print(f"   Action: {action}")
@@ -231,7 +231,7 @@ async def create_coding_agent():
 
     # Combine all tools
     tools = custom_tools + mcp_tools
-    print(f"✅ Coding agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
+    print(f"[OK] Coding agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
 
     # Create agent using LangChain 1.0 pattern with custom state schema
     # NOTE: create_agent() handles tool binding internally, no need for bind_tools()

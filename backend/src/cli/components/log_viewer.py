@@ -69,11 +69,11 @@ class LogViewer(RichLog):
         except json.JSONDecodeError:
             # Handle corrupted JSON
             if self.last_log_count == 0:
-                self.write(Text("⚠ Error: Failed to parse progress_log.json", style="bold red"))
+                self.write(Text("[EMOJI] Error: Failed to parse progress_log.json", style="bold red"))
         except Exception as e:
             # Handle other errors
             if self.last_log_count == 0:
-                self.write(Text(f"⚠ Error loading logs: {str(e)}", style="bold red"))
+                self.write(Text(f"[EMOJI] Error loading logs: {str(e)}", style="bold red"))
 
     def _write_log_entry(self, log_entry: Dict[str, Any]) -> None:
         """

@@ -61,8 +61,8 @@ def get_model(
 
     Note:
         The provider prefix can be omitted for well-known models:
-        - "gemini-2.5-pro" → inferred as "google_genai:gemini-2.5-pro"
-        - "gpt-4o" → inferred as "openai:gpt-4o"
+        - "gemini-2.5-pro" -> inferred as "google_genai:gemini-2.5-pro"
+        - "gpt-4o" -> inferred as "openai:gpt-4o"
     """
     model_name = model_override or os.getenv(
         "DEFAULT_MODEL",
@@ -73,7 +73,7 @@ def get_model(
         # LangChain 1.0 pattern: init_chat_model() automatically infers provider
         return init_chat_model(model_name, temperature=temperature)
     except Exception as e:
-        print(f"⚠️  Failed to initialize {model_name}: {e}")
+        print(f"[WARN]  Failed to initialize {model_name}: {e}")
         print("   Falling back to Gemini 1.5 Flash...")
         # Fallback to stable Gemini with better quota
         fallback_model = os.getenv("DEFAULT_MODEL", "google_genai:gemini-1.5-flash")
@@ -114,7 +114,7 @@ def get_smart_model() -> BaseChatModel:
         try:
             return get_model("anthropic:claude-sonnet-4-5-20250929", temperature=0)
         except Exception:
-            print("⚠️  Claude unavailable, falling back to Gemini")
+            print("[WARN]  Claude unavailable, falling back to Gemini")
 
     # Fallback to Gemini
     return get_cheap_model()
@@ -127,7 +127,7 @@ def get_sambanova_model() -> BaseChatModel:
     Falls back to Gemini if not available.
     """
     if not SAMBANOVA_AVAILABLE or llm is None:
-        print("⚠️  Sambanova not available, falling back to Gemini")
+        print("[WARN]  Sambanova not available, falling back to Gemini")
         return get_cheap_model()
     return llm
 
@@ -195,10 +195,10 @@ def get_initializer_model() -> BaseChatModel:
 
     if use_openrouter:
         try:
-            print("🔄 Using OpenRouter for Initializer Agent")
+            print("[SYNC] Using OpenRouter for Initializer Agent")
             return get_openrouter_model()
         except ValueError:
-            print("⚠️  OpenRouter not configured, falling back to Gemini")
+            print("[WARN]  OpenRouter not configured, falling back to Gemini")
             return get_cheap_model()
 
     # Default: Use Gemini (reliable tool calling)
@@ -218,7 +218,7 @@ def get_coding_model() -> BaseChatModel:
         try:
             return get_openrouter_model()
         except ValueError:
-            print("⚠️  OpenRouter not configured, falling back to Gemini")
+            print("[WARN]  OpenRouter not configured, falling back to Gemini")
             return get_cheap_model()
 
     return get_cheap_model()
@@ -237,7 +237,7 @@ def get_test_model() -> BaseChatModel:
         try:
             return get_openrouter_model()
         except ValueError:
-            print("⚠️  OpenRouter not configured, falling back to Gemini")
+            print("[WARN]  OpenRouter not configured, falling back to Gemini")
             return get_cheap_model()
 
     return get_cheap_model()
@@ -256,7 +256,7 @@ def get_qa_model() -> BaseChatModel:
         try:
             return get_openrouter_model()
         except ValueError:
-            print("⚠️  OpenRouter not configured, falling back to Gemini")
+            print("[WARN]  OpenRouter not configured, falling back to Gemini")
             return get_cheap_model()
 
     return get_cheap_model()

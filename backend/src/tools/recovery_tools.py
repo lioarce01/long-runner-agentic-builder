@@ -54,7 +54,7 @@ def load_pending_ops(repo_path: str) -> Dict[str, List[Dict[str, Any]]]:
                     data[key] = []
             return data
     except Exception as e:
-        print(f"⚠️  Failed to load pending_ops.json: {e}")
+        print(f"[WARN]  Failed to load pending_ops.json: {e}")
         return default
 
 
@@ -70,7 +70,7 @@ def save_pending_ops(repo_path: str, ops: Dict[str, List[Dict[str, Any]]]) -> No
         _ensure_gitignore_entry(repo_path, "pending_ops.json")
         
     except Exception as e:
-        print(f"⚠️  Failed to save pending_ops.json: {e}")
+        print(f"[WARN]  Failed to save pending_ops.json: {e}")
 
 
 # Mapping from singular to plural for operation types
@@ -139,7 +139,7 @@ def mark_pending(repo_path: str, op_type: str, feature_id: str) -> None:
     })
     
     save_pending_ops(repo_path, ops)
-    print(f"📝 Marked pending: {op_type} for {feature_id}")
+    print(f"[LOG] Marked pending: {op_type} for {feature_id}")
 
 
 def clear_pending(repo_path: str, op_type: str, feature_id: str) -> None:
@@ -160,7 +160,7 @@ def clear_pending(repo_path: str, op_type: str, feature_id: str) -> None:
     ops[op_key] = [o for o in ops[op_key] if o.get("feature_id") != feature_id]
     
     save_pending_ops(repo_path, ops)
-    print(f"✅ Cleared pending: {op_type} for {feature_id}")
+    print(f"[OK] Cleared pending: {op_type} for {feature_id}")
 
 
 def clear_all_pending(repo_path: str, feature_id: str) -> None:
@@ -171,7 +171,7 @@ def clear_all_pending(repo_path: str, feature_id: str) -> None:
         ops[op_key] = [o for o in ops[op_key] if o.get("feature_id") != feature_id]
     
     save_pending_ops(repo_path, ops)
-    print(f"✅ Cleared all pending ops for {feature_id}")
+    print(f"[OK] Cleared all pending ops for {feature_id}")
 
 
 def get_committed_features(repo_path: str) -> List[str]:
@@ -218,7 +218,7 @@ def get_committed_features(repo_path: str) -> List[str]:
         return list(set(committed))  # Unique IDs
         
     except Exception as e:
-        print(f"⚠️  Failed to get git history: {e}")
+        print(f"[WARN]  Failed to get git history: {e}")
         return []
 
 
@@ -264,7 +264,7 @@ def check_recovery_needed(repo_path: str, feature_list: List[Dict[str, Any]]) ->
     
     if needs_commit or needs_push:
         print(f"\n{'='*60}")
-        print(f"🔄 RECOVERY CHECK: Found pending operations")
+        print(f"[SYNC] RECOVERY CHECK: Found pending operations")
         print(f"   Features needing commit: {needs_commit}")
         print(f"   Features needing push: {needs_push}")
         print(f"{'='*60}\n")
@@ -289,7 +289,7 @@ def get_recovery_features(repo_path: str, feature_list: List[Dict[str, Any]]) ->
     # Clean up orphaned pending ops (features that no longer exist)
     orphaned_ids = feature_ids_needing_recovery - valid_feature_ids
     if orphaned_ids:
-        print(f"⚠️  Cleaning up orphaned pending ops: {orphaned_ids}")
+        print(f"[WARN]  Cleaning up orphaned pending ops: {orphaned_ids}")
         for orphan_id in orphaned_ids:
             clear_all_pending(repo_path, orphan_id)
     

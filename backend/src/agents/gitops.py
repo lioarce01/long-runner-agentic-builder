@@ -70,7 +70,7 @@ async def create_gitops_agent():
     
     # Combine all tools
     tools = custom_tools + mcp_tools
-    print(f"✅ GitOps agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
+    print(f"[OK] GitOps agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
     
     # Create agent using LangChain 1.0 pattern with custom state schema
     agent = create_agent(

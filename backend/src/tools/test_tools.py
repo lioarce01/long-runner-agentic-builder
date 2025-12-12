@@ -213,7 +213,7 @@ def run_pytest_tests(
         else:
             # Fallback to system pytest (for backwards compatibility)
             cmd = ["pytest"]
-            print(f"  ⚠️  Project venv not found, using system pytest")
+            print(f"  [WARN]  Project venv not found, using system pytest")
         
         if test_path:
             cmd.append(test_path)

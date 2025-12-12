@@ -44,7 +44,7 @@ def create_github_repo(
     github_token = os.getenv("GITHUB_TOKEN")
 
     if not github_token:
-        return "⚠️  GITHUB_TOKEN not set - skipping GitHub repo creation"
+        return "[WARN]  GITHUB_TOKEN not set - skipping GitHub repo creation"
 
     try:
         # Create repo via GitHub API
@@ -75,20 +75,20 @@ def create_github_repo(
             state["github_repo_url"] = html_url
 
             print(f"\n{'='*60}")
-            print(f"🎉 GITHUB REPO CREATED")
+            print(f"[COMPLETE] GITHUB REPO CREATED")
             print(f"   Repository: {html_url}")
             print(f"   Private: {private}")
             print(f"{'='*60}\n")
 
-            return f"✅ Created GitHub repo: {html_url}"
+            return f"[OK] Created GitHub repo: {html_url}"
         elif response.status_code == 422:
             # Repo already exists
-            return f"⚠️  Repository '{repo_name}' already exists on GitHub"
+            return f"[WARN]  Repository '{repo_name}' already exists on GitHub"
         else:
-            return f"❌ Failed to create repo: {response.status_code} - {response.text}"
+            return f"[FAIL] Failed to create repo: {response.status_code} - {response.text}"
 
     except Exception as e:
-        return f"❌ Error creating GitHub repo: {e}"
+        return f"[FAIL] Error creating GitHub repo: {e}"
 
 
 @tool
@@ -116,7 +116,7 @@ def push_to_github(
     github_token = os.getenv("GITHUB_TOKEN")
 
     if not github_token:
-        return "⚠️  GITHUB_TOKEN not set - skipping GitHub push"
+        return "[WARN]  GITHUB_TOKEN not set - skipping GitHub push"
 
     try:
         # Get GitHub username
@@ -127,7 +127,7 @@ def push_to_github(
         user_response = requests.get("https://api.github.com/user", headers=headers)
 
         if user_response.status_code != 200:
-            return f"❌ Failed to get GitHub user info: {user_response.status_code}"
+            return f"[FAIL] Failed to get GitHub user info: {user_response.status_code}"
 
         username = user_response.json()["login"]
         remote_url = f"https://{github_token}@github.com/{username}/{repo_name}.git"
@@ -176,19 +176,19 @@ def push_to_github(
             repo_url = f"https://github.com/{username}/{repo_name}"
 
             print(f"\n{'='*60}")
-            print(f"🚀 PUSHED TO GITHUB")
+            print(f"[PUSH] PUSHED TO GITHUB")
             print(f"   Repository: {repo_url}")
             print(f"   Branch: {branch}")
             print(f"{'='*60}\n")
 
-            return f"✅ Pushed to GitHub: {repo_url}"
+            return f"[OK] Pushed to GitHub: {repo_url}"
         else:
-            return f"❌ Push failed: {push_result.stderr}"
+            return f"[FAIL] Push failed: {push_result.stderr}"
 
     except subprocess.CalledProcessError as e:
-        return f"❌ Git command failed: {e.stderr}"
+        return f"[FAIL] Git command failed: {e.stderr}"
     except Exception as e:
-        return f"❌ Error pushing to GitHub: {e}"
+        return f"[FAIL] Error pushing to GitHub: {e}"
 
 
 @tool
@@ -216,7 +216,7 @@ def add_github_remote(
     github_token = os.getenv("GITHUB_TOKEN")
 
     if not github_token:
-        return "⚠️  GITHUB_TOKEN not set - skipping remote setup"
+        return "[WARN]  GITHUB_TOKEN not set - skipping remote setup"
 
     try:
         # Get username if not provided
@@ -230,7 +230,7 @@ def add_github_remote(
             if response.status_code == 200:
                 username = response.json()["login"]
             else:
-                return f"❌ Failed to get GitHub username: {response.status_code}"
+                return f"[FAIL] Failed to get GitHub username: {response.status_code}"
 
         remote_url = f"https://{github_token}@github.com/{username}/{repo_name}.git"
 
@@ -243,15 +243,15 @@ def add_github_remote(
         )
 
         if result.returncode == 0:
-            return f"✅ Added remote: origin -> https://github.com/{username}/{repo_name}.git"
+            return f"[OK] Added remote: origin -> https://github.com/{username}/{repo_name}.git"
         else:
             # Remote might already exist
             if "already exists" in result.stderr:
-                return f"⚠️  Remote 'origin' already exists"
-            return f"❌ Failed to add remote: {result.stderr}"
+                return f"[WARN]  Remote 'origin' already exists"
+            return f"[FAIL] Failed to add remote: {result.stderr}"
 
     except Exception as e:
-        return f"❌ Error adding remote: {e}"
+        return f"[FAIL] Error adding remote: {e}"
 
 
 __all__ = [

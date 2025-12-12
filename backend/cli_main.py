@@ -9,6 +9,12 @@ Launches a TUI with live feature board, logs, and token usage.
 
 import asyncio
 import sys
+
+# CRITICAL: Set Windows event loop policy BEFORE any other imports
+# This fixes PostgreSQL psycopg async compatibility on Windows
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from pathlib import Path
 from dotenv import load_dotenv
 from src.cli.app import BuilderApp
@@ -25,8 +31,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # Windows compatibility
-    if sys.platform == 'win32':
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
     main()

@@ -56,7 +56,7 @@ class CheckpointerFactory:
                 "Format: postgresql://user:pass@host:port/dbname"
             )
 
-        print(f"📦 Connecting to PostgreSQL...")
+        print(f"[SETUP] Connecting to PostgreSQL...")
 
         # Create connection pool with psycopg (required by LangGraph)
         # Use configure to set autocommit for CREATE INDEX CONCURRENTLY
@@ -83,7 +83,7 @@ class CheckpointerFactory:
         # Setup tables (idempotent operation)
         await cls._instance.setup()
 
-        print(f"✅ Checkpointer initialized with connection pool")
+        print(f"[OK] Checkpointer initialized with connection pool")
 
     @classmethod
     async def close(cls) -> None:
@@ -92,7 +92,7 @@ class CheckpointerFactory:
             await cls._pool.close()
             cls._pool = None
             cls._instance = None
-            print("✅ Checkpointer connection pool closed")
+            print("[OK] Checkpointer connection pool closed")
 
     @classmethod
     def get_thread_id(

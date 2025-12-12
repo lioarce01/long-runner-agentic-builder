@@ -54,9 +54,9 @@ class WorkflowRunner:
             # Try PostgreSQL first, fall back to NO checkpointer for testing
             try:
                 checkpointer = await CheckpointerFactory.get_checkpointer()
-                logger.info("✅ Using PostgreSQL checkpointer")
+                logger.info("[OK] Using PostgreSQL checkpointer")
             except Exception as e:
-                logger.warning(f"⚠️ PostgreSQL not available, running WITHOUT checkpointing")
+                logger.warning(f"[WARN] PostgreSQL not available, running WITHOUT checkpointing")
                 logger.warning(f"   (State won't persist between runs)")
                 checkpointer = None  # Run without checkpointer
 
@@ -124,12 +124,12 @@ class WorkflowRunner:
             }
 
             # Stream workflow execution
-            logger.info(f"🚀 Starting workflow stream...")
+            logger.info(f"[START] Starting workflow stream...")
             chunk_count = 0
 
             async for chunk in app.astream(initial_state, config):
                 chunk_count += 1
-                logger.info(f"📦 Chunk {chunk_count}: {list(chunk.keys())}")
+                logger.info(f"[CHUNK] Chunk {chunk_count}: {list(chunk.keys())}")
 
                 # Check if stop requested
                 if WorkflowRunner._should_stop:
@@ -142,7 +142,7 @@ class WorkflowRunner:
                 # Chunks automatically update disk files
                 # CLI polls files for UI updates (decoupled)
 
-            logger.info(f"✅ Workflow completed successfully ({chunk_count} chunks processed)")
+            logger.info(f"[OK] Workflow completed successfully ({chunk_count} chunks processed)")
 
         except asyncio.CancelledError:
             logger.info("Workflow task cancelled, shutting down gracefully")

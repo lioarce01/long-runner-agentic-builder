@@ -64,7 +64,7 @@ def create_init_script(
     # Backend setup
     if "python" in backend:
         script_lines.extend([
-            "echo '📦 Setting up Python backend...'",
+            "echo '[SETUP] Setting up Python backend...'",
             "python -m venv .venv",
             "source .venv/bin/activate || .venv\\Scripts\\activate",
             "pip install -r requirements.txt",
@@ -73,13 +73,13 @@ def create_init_script(
 
         if "fastapi" in backend:
             script_lines.extend([
-                "echo '🚀 Starting FastAPI server...'",
+                "echo '[PUSH] Starting FastAPI server...'",
                 "uvicorn main:app --reload &",
                 ""
             ])
         elif "django" in backend:
             script_lines.extend([
-                "echo '🚀 Starting Django server...'",
+                "echo '[PUSH] Starting Django server...'",
                 "python manage.py migrate",
                 "python manage.py runserver &",
                 ""
@@ -87,14 +87,14 @@ def create_init_script(
 
     elif "node" in backend or "javascript" in backend:
         script_lines.extend([
-            "echo '📦 Setting up Node.js backend...'",
+            "echo '[SETUP] Setting up Node.js backend...'",
             "npm install",
             ""
         ])
 
         if "express" in backend:
             script_lines.extend([
-                "echo '🚀 Starting Express server...'",
+                "echo '[PUSH] Starting Express server...'",
                 "npm run dev &",
                 ""
             ])
@@ -102,7 +102,7 @@ def create_init_script(
     # Frontend setup
     if frontend and "react" in frontend:
         script_lines.extend([
-            "echo '📦 Setting up React frontend...'",
+            "echo '[SETUP] Setting up React frontend...'",
             "cd frontend",
             "npm install",
             "npm start &",
@@ -111,7 +111,7 @@ def create_init_script(
         ])
     elif frontend and "vue" in frontend:
         script_lines.extend([
-            "echo '📦 Setting up Vue frontend...'",
+            "echo '[SETUP] Setting up Vue frontend...'",
             "cd frontend",
             "npm install",
             "npm run serve &",
@@ -122,19 +122,19 @@ def create_init_script(
     # Database setup
     if database and "postgresql" in database:
         script_lines.extend([
-            "echo '🗄️ Checking PostgreSQL...'",
+            "echo '[EMOJI] Checking PostgreSQL...'",
             "docker-compose up -d postgres",
             ""
         ])
     elif database and "mongodb" in database:
         script_lines.extend([
-            "echo '🗄️ Checking MongoDB...'",
+            "echo '[EMOJI] Checking MongoDB...'",
             "docker-compose up -d mongodb",
             ""
         ])
 
     script_lines.extend([
-        "echo '✅ Development environment ready!'",
+        "echo '[OK] Development environment ready!'",
         "echo 'Press Ctrl+C to stop all services'",
         "wait"
     ])
@@ -307,7 +307,7 @@ async def create_initializer_agent():
     # Combine all tools
     tools = custom_tools + mcp_tools
 
-    print(f"✅ Initializer agent: {len(custom_tools)} custom tools (bootstrap only, NO general filesystem tools) + {len(mcp_tools)} MCP tools")
+    print(f"[OK] Initializer agent: {len(custom_tools)} custom tools (bootstrap only, NO general filesystem tools) + {len(mcp_tools)} MCP tools")
     print(f"   Total tools: {len(tools)}")
     print(f"   Tool names: {[t.name if hasattr(t, 'name') else str(t) for t in tools[:5]]}...")
 
@@ -320,7 +320,7 @@ async def create_initializer_agent():
         state_schema=AppBuilderState
     )
 
-    print(f"✅ Agent created successfully")
+    print(f"[OK] Agent created successfully")
     print(f"   Agent type: {type(agent)}")
 
     return agent

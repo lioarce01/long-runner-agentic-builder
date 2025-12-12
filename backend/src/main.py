@@ -22,6 +22,12 @@ import asyncio
 import os
 import signal
 import sys
+
+# CRITICAL: Set Windows event loop policy BEFORE any other imports
+# This fixes PostgreSQL psycopg async compatibility on Windows
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from pathlib import Path
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
@@ -57,7 +63,7 @@ class SoftwareBuilderApp:
 
     async def startup(self):
         """Initialize all components"""
-        logger.info("🚀 Starting Multi-Agent Software Builder...")
+        logger.info("[PUSH] Starting Multi-Agent Software Builder...")
         logger.info(f"   Environment: {env}")
         logger.info(f"   LangChain 1.1.0 | LangGraph 1.0.4")
 
@@ -65,17 +71,17 @@ class SoftwareBuilderApp:
         checkpointer = await get_checkpointer()
 
         # Create workflow (now async to load MCP tools)
-        logger.info("📊 Creating multi-agent workflow...")
+        logger.info("[STATS] Creating multi-agent workflow...")
         self.workflow = await create_workflow()
         self.app = self.workflow.compile(checkpointer=checkpointer)
 
-        logger.info("✅ Application ready\n")
+        logger.info("[OK] Application ready\n")
 
     async def shutdown(self):
         """Cleanup resources"""
-        logger.info("\n🛑 Shutting down gracefully...")
+        logger.info("\n[EMOJI] Shutting down gracefully...")
         await CheckpointerFactory.close()
-        logger.info("✅ Shutdown complete")
+        logger.info("[OK] Shutdown complete")
 
     async def run(self, project_name: str, project_description: str):
         """
@@ -104,7 +110,7 @@ class SoftwareBuilderApp:
                 "thread_id": thread_id
             },
             # Increase recursion limit for projects with many features
-            # Each feature needs ~4 steps (coding → testing → qa → gitops)
+            # Each feature needs ~4 steps (coding -> testing -> qa -> gitops)
             # Default 25 is too low for 7+ features
             "recursion_limit": 150
         }
@@ -151,9 +157,9 @@ class SoftwareBuilderApp:
             "progress_log": []
         }
 
-        logger.info(f"📝 Project: {project_description}")
-        logger.info(f"📂 Output: {repo_path}")
-        logger.info(f"🔖 Thread ID: {thread_id}\n")
+        logger.info(f"[LOG] Project: {project_description}")
+        logger.info(f"[EMOJI] Output: {repo_path}")
+        logger.info(f"[EMOJI] Thread ID: {thread_id}\n")
         logger.info("=" * 80)
         logger.info("")
 
@@ -163,17 +169,17 @@ class SoftwareBuilderApp:
                 self._print_chunk(chunk)
 
                 if not self.running:
-                    logger.warning("\n⚠️  Interrupted by user")
+                    logger.warning("\n[WARN]  Interrupted by user")
                     break
 
         except KeyboardInterrupt:
-            logger.warning("\n⚠️  Interrupted by user")
+            logger.warning("\n[WARN]  Interrupted by user")
         except Exception as e:
-            logger.error(f"\n❌ Error during execution: {e}")
+            logger.error(f"\n[FAIL] Error during execution: {e}")
             raise
 
         logger.info("\n" + "=" * 80)
-        logger.info("✅ Multi-agent workflow completed!")
+        logger.info("[OK] Multi-agent workflow completed!")
 
     def _print_chunk(self, chunk: dict):
         """
@@ -186,7 +192,7 @@ class SoftwareBuilderApp:
             # Print agent activity
             if node_name in ["initializer", "coding", "testing", "qa_doc"]:
                 logger.info(f"\n{'='*60}")
-                logger.info(f"🤖 {node_name.upper()} AGENT STARTED")
+                logger.info(f"[AI] {node_name.upper()} AGENT STARTED")
                 logger.info("="*60)
 
             # Print messages from agents
@@ -201,15 +207,15 @@ class SoftwareBuilderApp:
 
                         # Check for tool calls in the message
                         if hasattr(latest, "tool_calls") and latest.tool_calls:
-                            logger.info(f"\n🔧 TOOL CALLS:")
+                            logger.info(f"\n[GITOPS] TOOL CALLS:")
                             for tool_call in latest.tool_calls:
                                 tool_name = tool_call.get("name", "unknown")
-                                logger.info(f"   → {tool_name}")
+                                logger.info(f"   -> {tool_name}")
 
                         # Check for tool results
                         if hasattr(latest, "name") and latest.name:
                             # This is a ToolMessage
-                            logger.info(f"\n✅ Tool Result: {latest.name}")
+                            logger.info(f"\n[OK] Tool Result: {latest.name}")
                             result_preview = str(content)[:100]
                             logger.info(f"   {result_preview}...")
                     else:
@@ -219,19 +225,19 @@ class SoftwareBuilderApp:
 
                     # Print AI responses (not tool results)
                     if content and role == "AI":
-                        logger.info(f"\n💭 Agent: {content[:200]}...")
+                        logger.info(f"\n[EMOJI] Agent: {content[:200]}...")
 
                 # Print state updates
                 if "current_feature" in node_output and node_output["current_feature"]:
                     feature = node_output["current_feature"]
-                    logger.info(f"\n📌 Current Feature:")
+                    logger.info(f"\n[EMOJI] Current Feature:")
                     logger.info(f"   ID: {feature['id']}")
                     logger.info(f"   Title: {feature['title']}")
                     logger.info(f"   Status: {feature.get('status', 'unknown')}")
                     logger.info(f"   Priority: {feature.get('priority', 'unknown')}")
 
                 if "phase" in node_output:
-                    logger.info(f"\n📍 Phase: {node_output['phase']}")
+                    logger.info(f"\n[EMOJI] Phase: {node_output['phase']}")
 
                 # Print feature list stats
                 if "feature_list" in node_output and node_output["feature_list"]:
@@ -241,19 +247,19 @@ class SoftwareBuilderApp:
                     done = sum(1 for f in features if f.get("status") == "done")
                     failed = sum(1 for f in features if f.get("status") == "failed")
 
-                    logger.info(f"\n📊 Progress:")
+                    logger.info(f"\n[STATS] Progress:")
                     logger.info(f"   Total: {len(features)} features")
-                    logger.info(f"   ✅ Done: {done}")
-                    logger.info(f"   🔄 In Progress: {in_progress}")
-                    logger.info(f"   ⏳ Pending: {pending}")
+                    logger.info(f"   [OK] Done: {done}")
+                    logger.info(f"   [SYNC] In Progress: {in_progress}")
+                    logger.info(f"   [WAIT] Pending: {pending}")
                     if failed > 0:
-                        logger.info(f"   ❌ Failed: {failed}")
+                        logger.info(f"   [FAIL] Failed: {failed}")
 
                 # Print git context updates
                 if "git_context" in node_output:
                     git_ctx = node_output["git_context"]
                     if git_ctx.get("last_commit_sha"):
-                        logger.info(f"\n🔖 Last commit: {git_ctx['last_commit_sha'][:7]}")
+                        logger.info(f"\n[EMOJI] Last commit: {git_ctx['last_commit_sha'][:7]}")
 
                 # Print test results
                 if "test_context" in node_output:
@@ -261,7 +267,7 @@ class SoftwareBuilderApp:
                     if test_ctx.get("last_result"):
                         result = test_ctx["last_result"]
                         passed = result.get("passed", False)
-                        status_icon = "✅" if passed else "❌"
+                        status_icon = "[OK]" if passed else "[FAIL]"
                         logger.info(f"\n{status_icon} Tests: {test_ctx.get('passed_tests', 0)}/{test_ctx.get('passed_tests', 0) + test_ctx.get('failed_tests', 0)} passed")
 
 
@@ -269,7 +275,7 @@ async def main():
     """Main entry point"""
     # Parse command-line arguments
     if len(sys.argv) < 3:
-        print("❌ Error: Missing required arguments\n")
+        print("[FAIL] Error: Missing required arguments\n")
         print("Usage: python src/main.py <project_name> <project_description>\n")
         print("Examples:")
         print('  python src/main.py chatbot-clone "Build a chatbot like Claude/ChatGPT"')
@@ -286,7 +292,7 @@ async def main():
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, frame):
         app.running = False
-        logger.warning("\n⚠️  Shutting down gracefully...")
+        logger.warning("\n[WARN]  Shutting down gracefully...")
 
     # Handle Ctrl+C gracefully (Windows compatible)
     signal.signal(signal.SIGINT, signal_handler)

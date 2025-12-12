@@ -100,7 +100,7 @@ def create_git_commit(
         commit_sha = sha_result.stdout.strip()[:7]
 
         print(f"\n{'='*60}")
-        print(f"📝 GIT COMMIT CREATED")
+        print(f"[LOG] GIT COMMIT CREATED")
         print(f"   SHA: {commit_sha}")
         print(f"   Message: {message[:60]}...")
         print(f"{'='*60}\n")

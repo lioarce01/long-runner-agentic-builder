@@ -65,16 +65,16 @@ async def create_mcp_client(project_path: Optional[str] = None) -> MultiServerMC
             "transport": "streamable_http",
             "headers": {"Authorization": f"Bearer {github_token}"}
         }
-        print("✅ GitHub MCP server enabled")
+        print("[OK] GitHub MCP server enabled")
     else:
-        print("⚠️  GITHUB_TOKEN not set - GitHub MCP server disabled")
+        print("[WARN]  GITHUB_TOKEN not set - GitHub MCP server disabled")
 
     try:
         client = MultiServerMCPClient(config)
-        print(f"✅ MCP client initialized with {len(config)} servers")
+        print(f"[OK] MCP client initialized with {len(config)} servers")
         return client
     except Exception as e:
-        print(f"❌ Failed to initialize MCP client: {e}")
+        print(f"[FAIL] Failed to initialize MCP client: {e}")
         # Fallback to filesystem only
         print("   Falling back to filesystem-only MCP client")
         return MultiServerMCPClient({
@@ -100,17 +100,17 @@ async def get_mcp_tools(project_path: Optional[str] = None) -> list:
     """
     # Check if MCP is disabled via environment variable
     if os.getenv("DISABLE_MCP", "false").lower() == "true":
-        print("⚠️  MCP disabled via DISABLE_MCP env var")
+        print("[WARN]  MCP disabled via DISABLE_MCP env var")
         print("   Using custom tools only...")
         return []
 
     try:
         client = await create_mcp_client(project_path)
         tools = await client.get_tools()
-        print(f"📦 Loaded {len(tools)} tools from MCP servers")
+        print(f"[SETUP] Loaded {len(tools)} tools from MCP servers")
         return tools
     except Exception as e:
-        print(f"⚠️  MCP tools failed to load: {type(e).__name__}")
+        print(f"[WARN]  MCP tools failed to load: {type(e).__name__}")
         print(f"   Continuing with custom tools only...")
         return []
 

@@ -74,7 +74,7 @@ def update_qa_progress_log(
         json.dump(log, f, indent=2)
 
     print(f"\n{'='*60}")
-    print(f"📋 PROGRESS LOG UPDATED")
+    print(f"[QA] PROGRESS LOG UPDATED")
     print(f"   Agent: qa_doc")
     print(f"   Feature: {feature_id}")
     print(f"   Action: {action}")
@@ -352,7 +352,7 @@ async def create_qa_doc_agent():
 
     # Combine all tools
     tools = custom_tools + mcp_tools
-    print(f"✅ QA/Doc agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
+    print(f"[OK] QA/Doc agent: {len(custom_tools)} custom tools + {len(mcp_tools)} MCP tools")
 
     # Create agent using LangChain 1.0 pattern with custom state schema
     # NOTE: create_agent() handles tool binding internally, no need for bind_tools()

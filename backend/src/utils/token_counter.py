@@ -93,10 +93,10 @@ def log_token_usage(
         with open(log_file, "w", encoding="utf-8") as f:
             json.dump(logs, f, indent=2)
     except Exception as e:
-        print(f"⚠️  Failed to write token_usage.json: {e}")
+        print(f"[WARN]  Failed to write token_usage.json: {e}")
 
     # Print summary
-    print(f"📊 TOKEN USAGE [{agent_name}] {feature_id}: {token_count:,} tokens ({message_count} messages)")
+    print(f"[TOKENS] TOKEN USAGE [{agent_name}] {feature_id}: {token_count:,} tokens ({message_count} messages)")
 
 
 def get_token_stats(repo_path: str) -> dict:
